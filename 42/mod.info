@@ -1,0 +1,11 @@
+name=Viewpoint FPS Optimization
+id=ViewpointFPS
+description=Adaptive performance layer for Project Viewpoint: dynamic resolution, chunk-mesh budgeting, shadow scaling, adaptive quality governor and a live stats overlay. Tuned for PZ Build 42.21 + Viewpoint alpha-0.1.6. Client-side only.
+version=1.0.0
+author=ViewpointFPS Project
+poster=poster.png
+
+require=\ZombieBuddy
+javaJarFile=media/java/client/build/libs/vpfps.jar
+javaPkgName=dev.vpfps
+ZBVersionMin=1.5.0

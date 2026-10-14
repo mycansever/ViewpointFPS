@@ -1,0 +1,2 @@
+# build artifacts (the shipped jar in build/libs is NOT ignored)
+42/media/java/client/build/classes/

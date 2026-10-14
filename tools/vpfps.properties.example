@@ -1,0 +1,38 @@
+# Viewpoint FPS Optimization - example configuration
+# Copy to:  <user>\Zomboid\vpfps.properties
+# The file hot-reloads within ~5 s while the game runs - edit it live.
+# Values are clamped to safe ranges on load; a typo can never break the renderer.
+
+# master kill switch - false = every hook passes through, stock behaviour
+enabled=true
+
+# governor mode: adaptive | fixed | off
+#   adaptive - quality ladders follow the measured frame time (recommended)
+#   fixed    - use the fixed values below, no adaptation
+#   off      - governor does nothing; mesh budget still applies
+governor=adaptive
+
+# frame-time budget the governor tries to hold (15..480)
+targetFps=60
+
+# let the governor scale Viewpoint's internal render resolution
+dynamicResolution=true
+
+# fixed values used in "fixed" mode (0.25..1.0)
+renderScaleFixed=1.0
+shadowScaleFixed=1.0
+
+# adaptive render-scale window (the governor never leaves [min,max])
+renderScaleMin=0.50
+renderScaleMax=1.0
+
+# per-frame budget for Viewpoint's chunk-mesh rebuilds, in milliseconds.
+# 2.0 ms/frame is a good default; 1.0 for very weak CPUs; disable below.
+meshBudgetEnabled=true
+meshBudgetMs=2.0
+
+# on-screen performance overlay (F9 toggles it in game)
+overlay=true
+
+# verbose logging to Zomboid/Logs/vpfps.log
+debug=false

@@ -1,0 +1,32 @@
+// Viewpoint FPS Optimization - optional Gradle build
+// (build.ps1 / build.sh produce the identical jar without Gradle)
+//
+//   cd 42/media/java/client && gradle build
+//
+// If you have the real ZombieBuddy.jar, replace the stubs dependency with
+// compileOnly files('path/to/ZombieBuddy.jar') and drop the stubs srcDir.
+
+plugins {
+    id 'java'
+}
+
+def stubsDir = file('../../../../tools/stubs')
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src', stubsDir]
+        }
+    }
+}
+
+compileJava {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+jar {
+    // ship only our own package; compile-only stubs (ZombieBuddy / ByteBuddy) stay out
+    include 'dev/**'
+    archiveFileName = 'vpfps.jar'
+}
