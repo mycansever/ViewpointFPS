@@ -1,5 +1,11 @@
 # Tuning rehberi
 
+> **v2.0:** yeni anahtarlar — `drawDistanceAdaptive` / `drawDistanceMin` (governor 0.70–1.00×
+> aralığında chunk mesafesini ölçekler), `chunkWalkThrottleEnabled` / `chunkWalkThrottleMs`
+> (dururken chunk taraması ~4×/sn'e iner), `statsExport` (CSV benchmark), `deferToPZOpt`
+> (PZ_Optimization algılandığında overlay'miz kenara çekilir), `autoProfile` (ilk açılışta
+> CPU çekirdek sayısına göre varsayılanlar).
+
 Tüm ayarlar canlıdır: Options > MODS > **Viewpoint FPS Optimization** (oyun içinde)
 veya `%USERPROFILE%\Zomboid\vpfps.properties` (≈5 sn'de hot-reload). Şablon:
 `tools/vpfps.properties.example`.

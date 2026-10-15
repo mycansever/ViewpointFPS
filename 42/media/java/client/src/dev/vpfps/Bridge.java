@@ -56,6 +56,71 @@ public final class Bridge {
         return FrameGovernor.renderScale();
     }
 
+    public static double getDrawDistanceFactor() {
+        return FrameGovernor.drawDistanceFactor();
+    }
+
+    public static String getCompatibility() {
+        return PZOCompat.status();
+    }
+
+    // ---- v2.0 live settings ----
+
+    public static void setDrawDistanceAdaptive(boolean v) {
+        Config.drawDistanceAdaptive = v;
+        Config.save();
+        if (!v) FrameGovernor.applyAll("lua");
+    }
+
+    public static boolean isDrawDistanceAdaptive() {
+        return Config.drawDistanceAdaptive;
+    }
+
+    public static void setDrawDistanceMin(double v) {
+        Config.drawDistanceMin = (float) Math.max(0.40, Math.min(1.0, v));
+        Config.save();
+    }
+
+    public static double getDrawDistanceMin() {
+        return Config.drawDistanceMin;
+    }
+
+    public static void setChunkWalkThrottle(boolean v) {
+        Config.chunkWalkThrottleEnabled = v;
+        Config.save();
+    }
+
+    public static boolean isChunkWalkThrottle() {
+        return Config.chunkWalkThrottleEnabled;
+    }
+
+    public static void setChunkWalkThrottleMs(double v) {
+        Config.chunkWalkThrottleMs = (int) Math.max(50, Math.min(2000, Math.round(v)));
+        Config.save();
+    }
+
+    public static double getChunkWalkThrottleMs() {
+        return Config.chunkWalkThrottleMs;
+    }
+
+    public static void setStatsExport(boolean v) {
+        Config.statsExport = v;
+        Config.save();
+    }
+
+    public static boolean isStatsExport() {
+        return Config.statsExport;
+    }
+
+    public static void setOverlayDetail(boolean v) {
+        Config.overlayDetail = v;
+        Config.save();
+    }
+
+    public static boolean isOverlayDetail() {
+        return Config.overlayDetail;
+    }
+
     // ---- live settings (all persisted to vpfps.properties) ----
 
     public static void setEnabled(boolean v) {

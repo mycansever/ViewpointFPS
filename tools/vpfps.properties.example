@@ -31,8 +31,35 @@ renderScaleMax=1.0
 meshBudgetEnabled=true
 meshBudgetMs=2.0
 
+# adaptive draw-distance window: governor scales Viewpoint's chunk/draw
+# distance between this factor and 1.0 of its stock value (0.40..1.0)
+drawDistanceAdaptive=true
+drawDistanceMin=0.70
+
+# chunk-walk idle throttle: while you stand still, Viewpoint's chunk scan
+# runs at most every N ms instead of every frame (50..2000). Full rate
+# returns the instant you move. false = off (stock behaviour).
+chunkWalkThrottleEnabled=true
+chunkWalkThrottleMs=250
+
+# append a benchmark row (fps, p90, p99, render share, ...) to
+# Zomboid/vpfps-stats.csv every 5 seconds
+statsExport=false
+
+# PZ_Optimization defer policy: auto | on | off
+#   auto/on - when PZ_Optimization is detected, our overlay steps aside
+#             (it has its own F9 overlay); everything else stays active.
+#             The two mods stack cleanly - no code is shared.
+#   off     - never defer
+deferToPZOpt=auto
+
+# first-run hardware heuristic: seeds the mesh budget / walk interval
+# from the CPU core count (only applies when no config file exists yet)
+autoProfile=true
+
 # on-screen performance overlay (F9 toggles it in game)
 overlay=true
+overlayDetail=true
 
 # verbose logging to Zomboid/Logs/vpfps.log
 debug=false

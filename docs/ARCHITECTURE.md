@@ -130,3 +130,28 @@ enabled=false           → tüm governor/passthrough kapanır, ölçüm devam e
   `@RuntimeType`/`@SuperCall`). Jar'a **girmezler** (yalnız `dev/vpfps` paketlenir);
   runtime'da gerçek annotation'lar ZombieBuddy.jar'dan çözülür.
 - Gerçek ZombieBuddy.jar'ın varsa stub yerine ona derleyebilirsin.
+
+## v2.0 eklemeleri
+
+- **Patch_ChunkWalk** (`viewpoint.world.ChunkWalk.walk`, delegation): dururken
+  frame başına tekrarlanan chunk yürüyüşünü `ChunkWalkThrottle` ile sınırlar —
+  oyuncu 0.25 kareden fazla hareket ettiğinde tam hız, durgunken
+  `chunkWalkThrottleMs` aralığı, 800 ms'lik emniyet supabı.
+- **Patch_FPCapture** (`viewpoint.FP.captureWorld`, advice): world-capture
+  süresini ölçer; overlay ve governor attribution'ı artık render / capture /
+  kalan olarak üç parçalı.
+- **Dördüncü kalite merdiveni — draw distance**: `ViewpointBridge` drawDistance
+  knob'unu int alanlarında da keşfeder, stok baseline'ı saklar ve governor
+  `baseline × faktör` yazar (0.70–1.00). Kullanıcı Viewpoint'ın kendi ayarını
+  yükseltirse baseline yukarı çeneklenir (asla kavga edilmez).
+- **PZOCompat**: PZ_Optimization'i `Zomboid/pzopt` dizini + işaret sınıf
+  yoklamalarıyla algılar. PZO'nun class override'ları ve bizim ZombieBuddy
+  hook'larımız üst üste biner (ByteBuddy yüklenen sınıfa — yani PZO
+  sürümüne — uygulanır). Tek çakışma F9 overlay'i: `deferToPZOpt=auto/on`
+  iken bizim overlay kapanır. PZO açık lisans taşımadığı için **sıfır kod
+  alınmıştır**; teknikler bağımsız yeniden implemente edilmiştir.
+- **StatsExporter**: `statsExport=true` iken her 5 sn'de
+  `Zomboid/vpfps-stats.csv`'ye bir satır — oturum sonrası analiz için.
+- **autoProfile**: config dosyası yoksa ilk açılışta `availableProcessors()`
+  ile mesh bütçesi / walk aralığı tohumlanır (≤4 çekirdek → 1.0 ms / 400 ms,
+  ≥12 → 3.0 ms).

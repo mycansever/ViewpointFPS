@@ -15,10 +15,15 @@ import java.util.TreeMap;
  * watches its mtime), so it doubles as a control surface when the Lua
  * bridge is unavailable. All values are clamped to sane ranges on load -
  * a typo in the file can never produce a broken renderer.
+ *
+ * v2.0: hardware auto-profiling (first run only), draw-distance ladder,
+ * chunk-walk idle throttle, stats export and the PZ_Optimization defer
+ * policy.
  */
 public final class Config {
 
     public enum GovernorMode { ADAPTIVE, FIXED, OFF }
+    public enum PzoDefer { AUTO, ON, OFF }
 
     static final Path FILE =
             Path.of(System.getProperty("user.home", "."), "Zomboid", "vpfps.properties");
@@ -35,15 +40,27 @@ public final class Config {
     public static volatile boolean meshBudgetEnabled = true;
     public static volatile float meshBudgetMs = 2.0f;
     public static volatile boolean overlay = true;
+    public static volatile boolean overlayDetail = true;
     public static volatile boolean debug = false;
 
+    // ---- v2.0 ----
+    public static volatile boolean drawDistanceAdaptive = true;
+    public static volatile float drawDistanceMin = 0.70f;   // governor floor, factor of stock
+    public static volatile boolean chunkWalkThrottleEnabled = true;
+    public static volatile int chunkWalkThrottleMs = 250;   // idle walk interval
+    public static volatile boolean statsExport = false;      // Zomboid/vpfps-stats.csv
+    public static volatile PzoDefer deferToPZOpt = PzoDefer.AUTO;
+    public static volatile boolean autoProfile = true;       // first-run hardware heuristic
+
     private static long lastLoaded = -1L;
+    private static boolean profiled = false;
 
     private Config() {}
 
     public static synchronized void load() {
+        boolean firstRun = !Files.exists(FILE);
         Properties p = new Properties();
-        if (Files.exists(FILE)) {
+        if (!firstRun) {
             try (InputStream in = Files.newInputStream(FILE)) {
                 p.load(in);
                 lastLoaded = Files.getLastModifiedTime(FILE).toMillis();
@@ -62,8 +79,31 @@ public final class Config {
         meshBudgetEnabled = bool(p, "meshBudgetEnabled", true);
         meshBudgetMs      = (float) clampD(num(p, "meshBudgetMs", 2.0), 0.1, 16.0);
         overlay           = bool(p, "overlay", true);
+        overlayDetail     = bool(p, "overlayDetail", true);
         debug             = bool(p, "debug", false);
+
+        drawDistanceAdaptive     = bool(p, "drawDistanceAdaptive", true);
+        drawDistanceMin          = (float) clampD(num(p, "drawDistanceMin", 0.70), 0.40, 1.0);
+        chunkWalkThrottleEnabled = bool(p, "chunkWalkThrottleEnabled", true);
+        chunkWalkThrottleMs      = (int) clampD(num(p, "chunkWalkThrottleMs", 250), 50, 2000);
+        statsExport              = bool(p, "statsExport", false);
+        deferToPZOpt             = pzoDefer(p.getProperty("deferToPZOpt"), PzoDefer.AUTO);
+        autoProfile              = bool(p, "autoProfile", true);
         if (renderScaleMin > renderScaleMax) renderScaleMin = renderScaleMax;
+
+        // first-run hardware heuristic: seed the mesh budget from the CPU count
+        if (firstRun && autoProfile && !profiled) {
+            profiled = true;
+            int cores = Runtime.getRuntime().availableProcessors();
+            if (cores <= 4) {
+                meshBudgetMs = 1.0f;
+                chunkWalkThrottleMs = 400;
+            } else if (cores >= 12) {
+                meshBudgetMs = 3.0f;
+            }
+            Log.info("autoProfile: " + cores + " logical cores -> meshBudget="
+                    + trim(meshBudgetMs) + "ms, chunkWalkThrottle=" + chunkWalkThrottleMs + "ms");
+        }
     }
 
     public static synchronized void save() {
@@ -116,7 +156,10 @@ public final class Config {
                 + " targetFps=" + targetFps
                 + " scale=[" + trim(renderScaleMin) + ".." + trim(renderScaleMax) + "]"
                 + " meshBudget=" + trim(meshBudgetMs) + "ms"
+                + " walkThrottle=" + chunkWalkThrottleMs + "ms"
+                + " drawDistMin=" + trim(drawDistanceMin)
                 + " overlay=" + overlay
+                + " statsExport=" + statsExport
                 + " enabled=" + enabled;
     }
 
@@ -133,6 +176,14 @@ public final class Config {
         m.put("meshBudgetEnabled", String.valueOf(meshBudgetEnabled));
         m.put("meshBudgetMs", trim(meshBudgetMs));
         m.put("overlay", String.valueOf(overlay));
+        m.put("overlayDetail", String.valueOf(overlayDetail));
+        m.put("drawDistanceAdaptive", String.valueOf(drawDistanceAdaptive));
+        m.put("drawDistanceMin", trim(drawDistanceMin));
+        m.put("chunkWalkThrottleEnabled", String.valueOf(chunkWalkThrottleEnabled));
+        m.put("chunkWalkThrottleMs", String.valueOf(chunkWalkThrottleMs));
+        m.put("statsExport", String.valueOf(statsExport));
+        m.put("deferToPZOpt", deferToPZOpt.name().toLowerCase());
+        m.put("autoProfile", String.valueOf(autoProfile));
         m.put("debug", String.valueOf(debug));
         return m;
     }
@@ -168,6 +219,15 @@ public final class Config {
         if (v == null) return def;
         try {
             return GovernorMode.valueOf(v.trim().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return def;
+        }
+    }
+
+    private static PzoDefer pzoDefer(String v, PzoDefer def) {
+        if (v == null) return def;
+        try {
+            return PzoDefer.valueOf(v.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             return def;
         }

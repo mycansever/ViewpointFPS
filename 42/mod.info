@@ -1,7 +1,7 @@
 name=Viewpoint FPS Optimization
 id=ViewpointFPS
-description=Adaptive performance layer for Project Viewpoint: dynamic resolution, chunk-mesh budgeting, shadow scaling, adaptive quality governor and a live stats overlay. Tuned for PZ Build 42.21 + Viewpoint alpha-0.1.6. Client-side only.
-version=1.0.0
+description=Adaptive performance layer for Project Viewpoint: dynamic resolution, draw-distance scaling, chunk-walk idle throttle, chunk-mesh budgeting, shadow scaling, adaptive quality governor, live stats overlay + CSV export. Tuned for PZ Build 42.21 + Viewpoint alpha-0.1.6. PZ_Optimization-compatible. Client-side only.
+version=2.0.0
 author=ViewpointFPS Project
 poster=poster.png
 

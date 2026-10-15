@@ -6,6 +6,16 @@
 
 ---
 
+## What's new in v2.0
+
+- **Chunk-walk idle throttle** — while you stand still (looting, fighting in place, crafting) Viewpoint still re-scans its chunk cache every frame. v2.0 rate-limits that scan to ~4×/s when idle; full rate returns the instant you move. Free game-thread time the vanilla settings can never give you.
+- **Adaptive draw distance** — a fourth governor ladder that scales Viewpoint's chunk/draw distance (factor 0.70–1.00 of its stock value) under game-thread pressure. Fewer chunks = fewer meshes, fewer draws. The stock baseline is remembered and ratchets up if you raise Viewpoint's own setting, so the governor never fights you.
+- **World-capture attribution** — `FP.captureWorld` is now measured alongside `FP.renderWorld`, splitting each frame into render (GPU feed) vs world capture (game thread) vs everything else.
+- **PZ_Optimization compatibility layer** — detects [xD3I/PZ_Optimization](https://github.com/xD3I/PZ_Optimization) at runtime; the two stack cleanly (their class overrides + our ZombieBuddy hooks). Our overlay steps aside when PZO's own F9 overlay is present (`deferToPZOpt=auto`). Note: PZO carries **no open license**, so this project contains zero of its code — techniques only, reimplemented independently.
+- **Benchmark CSV export** — `statsExport=true` appends fps/p90/p99/render-share rows to `Zomboid/vpfps-stats.csv` every 5 s.
+- **Hardware auto-profiling** — first run seeds the mesh budget and walk interval from your CPU core count (≤4 cores → 1.0 ms / 400 ms, ≥12 → 3.0 ms).
+- **Overlay v2** — 1% low, draw distance, capture time, PZO status, detail toggle.
+
 ## What it does
 
 | Optimization | What it actually does | How |
@@ -52,6 +62,14 @@ Two equivalent paths: **Options → MODS → Viewpoint FPS Optimization** (appli
 | `renderScaleFixed` / `shadowScaleFixed` | 0.25–1.0 | `1.00` | Fixed-mode values |
 | `meshBudgetEnabled` | bool | `true` | Mesh budget kill switch |
 | `meshBudgetMs` | 0.1–16 | `2.0` | Per-frame mesh time (ms) |
+| `drawDistanceAdaptive` | bool | `true` | Governor scales draw distance |
+| `drawDistanceMin` | 0.40–1.0 | `0.70` | Draw-distance floor (factor of stock) |
+| `chunkWalkThrottleEnabled` | bool | `true` | Idle chunk-walk throttle kill switch |
+| `chunkWalkThrottleMs` | 50–2000 | `250` | Idle walk interval (ms) |
+| `statsExport` | bool | `false` | CSV benchmark log (vpfps-stats.csv) |
+| `deferToPZOpt` | auto/on/off | `auto` | Step aside for PZ_Optimization's overlay |
+| `autoProfile` | bool | `true` | First-run hardware heuristic |
+| `overlayDetail` | bool | `true` | Extra overlay lines |
 | `overlay` | bool | `true` | F9 overlay |
 | `debug` | bool | `false` | Verbose logging |
 
@@ -59,14 +77,19 @@ Two equivalent paths: **Options → MODS → Viewpoint FPS Optimization** (appli
 
 ```
 ZombieBuddy (java agent) ─ loads dev.vpfps jar
-  ├─ Main                 → config, Lua bridge, watcher thread
+  ├─ Main                 → config, Lua bridge, watcher thread, autoProfile
   ├─ Patch_GameWindow     → frame measurement + budget refill   (zombie.GameWindow.frameStep)
   ├─ Patch_FP             → Viewpoint render time               (viewpoint.FP.renderWorld)
+  ├─ Patch_FPCapture      → world-capture time                  (viewpoint.FP.captureWorld)
   ├─ Patch_ChunkBuilds    → mesh rebuild budget gate            (viewpoint.world.ChunkBuilds.rebuild)
+  ├─ Patch_ChunkWalk      → idle chunk-walk throttle            (viewpoint.world.ChunkWalk.walk)
   ├─ Patch_IngameState    → overlay drawing                     (zombie.gameStates.IngameState.render)
-  ├─ FrameGovernor        → adaptive quality decisions (GPU/CPU attribution)
-  ├─ ViewpointBridge      → reflection knob discovery (renderScale, shadowScale, ...)
+  ├─ FrameGovernor        → adaptive quality decisions (GPU/CPU attribution, 4 ladders)
+  ├─ ViewpointBridge      → reflection knob discovery (renderScale, shadowScale, drawDistance)
+  ├─ ChunkWalkThrottle    → movement-aware idle throttle with safety valve
   ├─ MeshBudget           → thread-safe, self-calibrating token bucket
+  ├─ PZOCompat            → PZ_Optimization detection + defer policy
+  ├─ StatsExporter        → CSV benchmark log
   ├─ Overlay / Bridge     → TextManager overlay / Lua facade (VPFPSBridge)
   └─ Guard / Config / Stats / Log
 Lua (client/VPFPS/)  → B42 PZAPI.ModOptions page + F9 keybind + diff-sync
@@ -95,6 +118,16 @@ Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Tuning guide: [`docs/
 ## Türkçe
 
 **Project Zomboid Build 42.21'deki [Project Viewpoint](https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528) (first/third-person 3D renderer) için adaptif FPS optimizasyon katmanı** — [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy) üzerinden yüklenir, sadece client tarafı, kamu malı.
+
+### v2.0'daki yenilikler
+
+- **Chunk-walk idle throttle** — olduğun yerde dururken (yağmalama, yerinde dövüş, craft) Viewpoint chunk cache'ini her frame yeniden tarar. v2.0 bunu durgunken saniyede ~4 kezle sınırlar; hareket ettiğin an tam hız geri döner. Vanilla ayarlarının asla veremeyeceği bedava game-thread zamanı.
+- **Adaptif draw distance** — governor'a dördüncü merdiven: game-thread baskısında Viewpoint'ın chunk/draw mesafesini (stok değerinin 0.70–1.00 katı) ölçekler. Daha az chunk = daha az mesh, daha az draw. Stok baseline hatırlanır ve sen Viewpoint'ın kendi ayarını yükseltirsen yukarı çekilir — governor seninle asla kavga etmez.
+- **World-capture attribution** — artık `FP.captureWorld` da ölçülüyor (`FP.renderWorld` ile birlikte): frame; render (GPU) vs world capture (game thread) vs geri kalanına ayrılıyor.
+- **PZ_Optimization uyumluluk katmanı** — [xD3I/PZ_Optimization](https://github.com/xD3I/PZ_Optimization) runtime'da algılanır; ikisi sorunsuz üst üste biner (onların class override'ları + bizim ZombieBuddy hook'larımız). PZO'nun kendi F9 overlay'i varken bizimki kenara çekilir (`deferToPZOpt=auto`). Not: PZO **açık lisans taşımıyor**, bu yüzden bu projede ondan sıfır kod var — sadece teknikler, bağımsız yeniden implementasyon.
+- **Benchmark CSV export** — `statsExport=true` her 5 saniyede fps/p90/p99/render-payı satırlarını `Zomboid/vpfps-stats.csv`'ye yazar.
+- **Donanım auto-profile** — ilk açılışta mesh bütçesi ve walk aralığı CPU çekirdek sayısına göre atanır (≤4 çekirdek → 1.0 ms / 400 ms, ≥12 → 3.0 ms).
+- **Overlay v2** — 1% low, draw distance, capture süresi, PZO durumu, detay toggle'ı.
 
 ### Ne yapar?
 
@@ -131,14 +164,19 @@ Doğrulama: `Zomboid\Logs\vpfps.log` içinde `knob 'renderScale' -> ...` satırl
 
 ```
 ZombieBuddy (java agent) ─ dev.vpfps jar'ı yükler
-  ├─ Main                 → config, Lua köprüsü, watcher thread
+  ├─ Main                 → config, Lua köprüsü, watcher thread, autoProfile
   ├─ Patch_GameWindow     → frame ölçümü + budget refill   (zombie.GameWindow.frameStep)
   ├─ Patch_FP             → Viewpoint render süresi        (viewpoint.FP.renderWorld)
+  ├─ Patch_FPCapture      → world-capture süresi           (viewpoint.FP.captureWorld)
   ├─ Patch_ChunkBuilds    → mesh rebuild bütçe kapısı      (viewpoint.world.ChunkBuilds.rebuild)
+  ├─ Patch_ChunkWalk      → idle chunk-walk throttle       (viewpoint.world.ChunkWalk.walk)
   ├─ Patch_IngameState    → overlay çizimi                 (zombie.gameStates.IngameState.render)
-  ├─ FrameGovernor        → adaptif kalite kararları (GPU/CPU attribution)
-  ├─ ViewpointBridge      → reflection ile knob discovery (renderScale, shadowScale, ...)
+  ├─ FrameGovernor        → adaptif kalite kararları (GPU/CPU attribution, 4 merdiven)
+  ├─ ViewpointBridge      → reflection ile knob discovery (renderScale, shadowScale, drawDistance)
+  ├─ ChunkWalkThrottle    → hareket algılayan idle throttle + emniyet supabı
   ├─ MeshBudget           → thread-safe, self-calibrating token bucket
+  ├─ PZOCompat            → PZ_Optimization algılama + defer politikası
+  ├─ StatsExporter        → CSV benchmark log
   ├─ Overlay / Bridge     → TextManager overlay / Lua facade (VPFPSBridge)
   └─ Guard / Config / Stats / Log
 Lua (client/VPFPS/)  → B42 PZAPI.ModOptions sayfası + F9 keybind + diff-sync

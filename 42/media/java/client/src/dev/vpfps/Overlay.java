@@ -42,7 +42,8 @@ public final class Overlay {
 
             int y = Y;
             y = line(fontMedium, y, "VPFPS " + Main.VERSION + "  |  "
-                            + Config.governor + "  |  target " + Config.targetFps + " fps",
+                            + Config.governor + "  |  target " + Config.targetFps + " fps"
+                            + (PZOCompat.isDetected() ? "  |  PZO: on" : ""),
                     1.0f, 0.9f, 0.4f);
 
             float fps = FrameGovernor.fps();
@@ -52,19 +53,24 @@ public final class Overlay {
             else if (fps >= t * 0.70f) { r = 0.95f; g = 0.80f; b = 0.25f; }
             else                       { r = 0.95f; g = 0.35f; b = 0.30f; }
             y = line(fontSmall, y, String.format(
-                    "FPS %.1f   frame %.1f ms   p99 %.1f ms",
-                    fps, FrameGovernor.frameMean(), FrameGovernor.frameP99()), r, g, b);
+                    "FPS %.1f (1%% low %.1f)   frame %.1f ms   p99 %.1f ms",
+                    fps, FrameGovernor.fpsOnePercentLow(),
+                    FrameGovernor.frameMean(), FrameGovernor.frameP99()), r, g, b);
 
-            y = line(fontSmall, y, String.format(
-                    "VP render %.1f ms (%.0f%%)   mesh %.1f ms avg   %d skipped",
-                    FrameGovernor.vpRenderMean(), FrameGovernor.vpShare() * 100f,
-                    MeshBudget.stats().mean(), MeshBudget.skippedCount()),
-                    0.80f, 0.85f, 0.90f);
+            if (Config.overlayDetail) {
+                y = line(fontSmall, y, String.format(
+                        "VP render %.1f ms (%.0f%%)   capture %.1f ms   mesh %.1f ms avg   %d skipped",
+                        FrameGovernor.vpRenderMean(), FrameGovernor.vpShare() * 100f,
+                        FrameGovernor.captureMean(),
+                        MeshBudget.stats().mean(), MeshBudget.skippedCount()),
+                        0.80f, 0.85f, 0.90f);
 
-            y = line(fontSmall, y, String.format(
-                    "scale %.2f   shadow %.2f   mesh budget %.1f ms",
-                    FrameGovernor.renderScale(), FrameGovernor.shadowScale(),
-                    MeshBudget.budget()), 0.80f, 0.85f, 0.90f);
+                y = line(fontSmall, y, String.format(
+                        "scale %.2f   dist %.2fx   shadow %.2f   mesh budget %.1f ms   walk %d ms",
+                        FrameGovernor.renderScale(), FrameGovernor.drawDistanceFactor(),
+                        FrameGovernor.shadowScale(), MeshBudget.budget(),
+                        Config.chunkWalkThrottleMs), 0.80f, 0.85f, 0.90f);
+            }
 
             y = line(fontSmall, y, FrameGovernor.lastAction(), 0.60f, 0.65f, 0.70f);
 
