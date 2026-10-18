@@ -77,9 +77,9 @@ Everything is live-tunable, no restart needed: [b]Options → MODS → Viewpoint
 [*][b]Suspected crash[/b] — set enabled=false in vpfps.properties and check Zomboid\Logs\vpfps.log.
 [/list]
 
-[h1]📜 License — public domain[/h1]
+[h1]📜 License — MIT[/h1]
 
-This mod is released under [url=https://unlicense.org]The Unlicense[/url] (public domain). Copy it, modify it, sell it, bundle it in your own mod, develop and publish your own version — [b]no permission and no attribution required[/b]. The author develops this mod however they feel like; you are invited to do exactly the same.
+This mod is released under the [url=https://opensource.org/licenses/MIT]MIT License[/url]. Copy it, modify it, sell it, bundle it in your own mod, develop and publish your own version — [b]as long as you keep the original copyright notice and license text[/b] (i.e. credit the original project). The author develops this mod however they feel like; you are invited to build on it — just keep the credit.
 
 Project Zomboid © The Indie Stone. Project Viewpoint and ZombieBuddy belong to their respective authors. This is an unrelated third-party work, not affiliated with any of them.
 
@@ -151,8 +151,8 @@ Her şey canlı ayarlanabilir, restart gerekmez: [b]Options → MODS → Viewpoi
 [*][b]Crash şüphesi[/b] — vpfps.properties içinde enabled=false yap ve Zomboid\Logs\vpfps.log'a bak.
 [/list]
 
-[h1]📜 Telif — kamu malı[/h1]
+[h1]📜 Telif — MIT[/h1]
 
-Bu mod [url=https://unlicense.org]The Unlicense[/url] (kamu malı / public domain) ile yayınlanır. Kopyala, değiştir, sat, kendi modunda kullan, kendi versiyonunu geliştirip yayınla — [b]izin almaya ve atıf yapmaya gerek yok[/b]. Mod, yazarının keyfine göre geliştirilir; sen de aynısını yapmaya davetlisin.
+Bu mod [url=https://opensource.org/licenses/MIT]MIT Lisansı[/url] ile yayınlanır. Kopyala, değiştir, sat, kendi modunda kullan, kendi versiyonunu geliştirip yayınla — tek şartla: [b]orijinal telif notunu ve lisans metnini koru[/b] (yani orijinal projeden bahset/atıf yap). Mod, yazarının keyfine göre geliştirilir; sen de üzerine inşa etmeye davetlisin — sadece krediyi koru.
 
 Project Zomboid © The Indie Stone. Project Viewpoint ve ZombieBuddy kendi yazarlarına aittir. Bu mod onlarla bağlantısız bir üçüncü parti çalışmadır.

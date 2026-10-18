@@ -1,6 +1,6 @@
 # Viewpoint FPS Optimization
 
-**Adaptive FPS optimization layer for [Project Viewpoint](https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528) on Project Zomboid Build 42.21** — loaded through [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy), client-side only, public domain.
+**Adaptive FPS optimization layer for [Project Viewpoint](https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528) on Project Zomboid Build 42.21** — loaded through [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy), client-side only, MIT licensed.
 
 **English** below · [Türkçe sürüm için tıkla ↓](#türkçe)
 
@@ -117,7 +117,7 @@ Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Tuning guide: [`docs/
 
 ## Türkçe
 
-**Project Zomboid Build 42.21'deki [Project Viewpoint](https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528) (first/third-person 3D renderer) için adaptif FPS optimizasyon katmanı** — [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy) üzerinden yüklenir, sadece client tarafı, kamu malı.
+**Project Zomboid Build 42.21'deki [Project Viewpoint](https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528) (first/third-person 3D renderer) için adaptif FPS optimizasyon katmanı** — [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy) üzerinden yüklenir, sadece client tarafı, MIT lisanslı.
 
 ### v2.0'daki yenilikler
 
@@ -204,9 +204,9 @@ Detaylar: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Tuning: [`docs/TUNIN
 
 ## License / Lisans
 
-**Public domain — [The Unlicense](https://unlicense.org).** Copy it, fork it, modify it, sell it, bundle it, publish your own version — **no permission and no attribution required**. This mod is developed however the author feels like it, and you are invited to do exactly the same: take it and make it yours.
+**[MIT License](LICENSE).** Copy it, fork it, modify it, sell it, bundle it, publish your own version — **as long as the original copyright notice and this license text are kept** in the copy (credit to the original project). This mod is developed however the author feels like it, and you are welcome to take it and build on it — just keep the credit line.
 
-**Kamu malı — [The Unlicense](https://unlicense.org).** Kopyala, fork'la, değiştir, sat, paketle, kendi versiyonunu geliştirip yayınla — **izin ya da atıf gerekmez**. Mod yazarının keyfine göre geliştirilir; sen de aynısını yapmaya davetlisin: al, kendine göre yap.
+**[MIT Lisansı](LICENSE).** Kopyala, fork'la, değiştir, sat, paketle, kendi versiyonunu geliştirip yayınla — tek şartla: kopyada **orijinal telif notu ve bu lisans metni kalsın** (yani orijinal projeden bahset/atıf yap). Mod yazarının keyfine göre geliştirilir; alıp üzerine inşa etmeye davetlisin — sadece kredi satırını koru.
 
 - Methodology inspiration: [xD3I/PZ_Optimization](https://github.com/xD3I/PZ_Optimization) (chunk bake budget, measurement-driven governor, kill-switch philosophy)
 - Loading infrastructure: [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy) (zed_0xff)
