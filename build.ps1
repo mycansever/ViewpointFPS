@@ -65,10 +65,11 @@ if (-not $jarExe) {
     throw "jar.exe not found (looked next to javac: $JavaC, and in common JDK folders)"
 }
 
-# --- compile ---
+# --- compile (clean first: stale classes from removed sources must never ship) ---
 $sources = @(Get-ChildItem -Path $srcMain, $stubs -Recurse -Filter *.java |
     Select-Object -ExpandProperty FullName)
 Write-Host "compiling $($sources.Count) source files ($([System.IO.Path]::GetFileName($JavaC)))"
+if (Test-Path $classes) { Remove-Item -Recurse -Force $classes }
 New-Item -ItemType Directory -Force -Path $classes | Out-Null
 & $JavaC --release 17 -encoding UTF-8 -nowarn -d $classes $sources
 if ($LASTEXITCODE -ne 0) { throw "javac failed (exit $LASTEXITCODE)" }

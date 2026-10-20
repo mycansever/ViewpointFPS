@@ -10,15 +10,12 @@ import java.util.TreeMap;
 
 /**
  * Live-tunable configuration, persisted at  <user>\Zomboid\vpfps.properties.
+ * Hot-reloads within ~5 s while the game runs. Every value is clamped on
+ * load; a typo can never produce a broken renderer.
  *
- * The file hot-reloads within ~5 s while the game runs (a daemon thread
- * watches its mtime), so it doubles as a control surface when the Lua
- * bridge is unavailable. All values are clamped to sane ranges on load -
- * a typo in the file can never produce a broken renderer.
- *
- * v2.0: hardware auto-profiling (first run only), draw-distance ladder,
- * chunk-walk idle throttle, stats export and the PZ_Optimization defer
- * policy.
+ * v3.0: the governor now drives Viewpoint's OWN settings through factor
+ * ladders (cpuFactor / gpuFactor inside Viewpoint's declared ranges),
+ * plus memory-pool scaling and in-game frame-cap control.
  */
 public final class Config {
 
@@ -28,29 +25,23 @@ public final class Config {
     static final Path FILE =
             Path.of(System.getProperty("user.home", "."), "Zomboid", "vpfps.properties");
 
-    // ---- settings (volatile: written by the watcher thread, read on the frame loop) ----
+    // ---- settings (volatile: watcher thread writes, frame loop reads) ----
     public static volatile boolean enabled = true;
     public static volatile GovernorMode governor = GovernorMode.ADAPTIVE;
     public static volatile int targetFps = 60;
-    public static volatile boolean dynamicResolution = true;
-    public static volatile float renderScaleFixed = 1.0f;
-    public static volatile float renderScaleMin = 0.50f;
-    public static volatile float renderScaleMax = 1.00f;
-    public static volatile float shadowScaleFixed = 1.0f;
-    public static volatile boolean meshBudgetEnabled = true;
-    public static volatile float meshBudgetMs = 2.0f;
+    public static volatile boolean cpuAdaptive = true;     // CPU ladder on/off
+    public static volatile boolean gpuAdaptive = true;     // GPU ladder on/off
+    public static volatile float cpuFactorMin = 0.30f;     // CPU ladder floor
+    public static volatile float gpuFactorMin = 0.30f;     // GPU ladder floor
+    public static volatile float cpuFactorFixed = 1.0f;    // fixed-mode values
+    public static volatile float gpuFactorFixed = 1.0f;
+    public static volatile float memoryScale = 1.0f;       // pool budget scale
     public static volatile boolean overlay = true;
     public static volatile boolean overlayDetail = true;
-    public static volatile boolean debug = false;
-
-    // ---- v2.0 ----
-    public static volatile boolean drawDistanceAdaptive = true;
-    public static volatile float drawDistanceMin = 0.70f;   // governor floor, factor of stock
-    public static volatile boolean chunkWalkThrottleEnabled = true;
-    public static volatile int chunkWalkThrottleMs = 250;   // idle walk interval
-    public static volatile boolean statsExport = false;      // Zomboid/vpfps-stats.csv
+    public static volatile boolean statsExport = false;
     public static volatile PzoDefer deferToPZOpt = PzoDefer.AUTO;
-    public static volatile boolean autoProfile = true;       // first-run hardware heuristic
+    public static volatile boolean autoProfile = true;
+    public static volatile boolean debug = false;
 
     private static long lastLoaded = -1L;
     private static boolean profiled = false;
@@ -68,41 +59,35 @@ public final class Config {
                 Log.warn("could not read " + FILE + " (" + t + ") - defaults in use");
             }
         }
-        enabled           = bool(p, "enabled", true);
-        governor          = mode(p.getProperty("governor"), GovernorMode.ADAPTIVE);
-        targetFps         = (int) clampD(num(p, "targetFps", 60), 15, 480);
-        dynamicResolution = bool(p, "dynamicResolution", true);
-        renderScaleFixed  = (float) clampD(num(p, "renderScaleFixed", 1.0), 0.25, 1.0);
-        renderScaleMin    = (float) clampD(num(p, "renderScaleMin", 0.50), 0.25, 1.0);
-        renderScaleMax    = (float) clampD(num(p, "renderScaleMax", 1.00), 0.25, 1.0);
-        shadowScaleFixed  = (float) clampD(num(p, "shadowScaleFixed", 1.0), 0.25, 1.0);
-        meshBudgetEnabled = bool(p, "meshBudgetEnabled", true);
-        meshBudgetMs      = (float) clampD(num(p, "meshBudgetMs", 2.0), 0.1, 16.0);
-        overlay           = bool(p, "overlay", true);
-        overlayDetail     = bool(p, "overlayDetail", true);
-        debug             = bool(p, "debug", false);
+        enabled        = bool(p, "enabled", true);
+        governor       = mode(p.getProperty("governor"), GovernorMode.ADAPTIVE);
+        targetFps      = (int) clampD(num(p, "targetFps", 60), 15, 480);
+        cpuAdaptive    = bool(p, "cpuAdaptive", true);
+        gpuAdaptive    = bool(p, "gpuAdaptive", true);
+        cpuFactorMin   = (float) clampD(num(p, "cpuFactorMin", 0.30), 0.10, 1.0);
+        gpuFactorMin   = (float) clampD(num(p, "gpuFactorMin", 0.30), 0.10, 1.0);
+        cpuFactorFixed = (float) clampD(num(p, "cpuFactorFixed", 1.0), 0.10, 1.0);
+        gpuFactorFixed = (float) clampD(num(p, "gpuFactorFixed", 1.0), 0.10, 1.0);
+        memoryScale    = (float) clampD(num(p, "memoryScale", 1.0), 0.30, 2.0);
+        overlay        = bool(p, "overlay", true);
+        overlayDetail  = bool(p, "overlayDetail", true);
+        statsExport    = bool(p, "statsExport", false);
+        deferToPZOpt   = pzoDefer(p.getProperty("deferToPZOpt"), PzoDefer.AUTO);
+        autoProfile    = bool(p, "autoProfile", true);
+        debug          = bool(p, "debug", false);
 
-        drawDistanceAdaptive     = bool(p, "drawDistanceAdaptive", true);
-        drawDistanceMin          = (float) clampD(num(p, "drawDistanceMin", 0.70), 0.40, 1.0);
-        chunkWalkThrottleEnabled = bool(p, "chunkWalkThrottleEnabled", true);
-        chunkWalkThrottleMs      = (int) clampD(num(p, "chunkWalkThrottleMs", 250), 50, 2000);
-        statsExport              = bool(p, "statsExport", false);
-        deferToPZOpt             = pzoDefer(p.getProperty("deferToPZOpt"), PzoDefer.AUTO);
-        autoProfile              = bool(p, "autoProfile", true);
-        if (renderScaleMin > renderScaleMax) renderScaleMin = renderScaleMax;
-
-        // first-run hardware heuristic: seed the mesh budget from the CPU count
+        // first-run heuristic: weak CPUs start the CPU ladder lower
         if (firstRun && autoProfile && !profiled) {
             profiled = true;
             int cores = Runtime.getRuntime().availableProcessors();
             if (cores <= 4) {
-                meshBudgetMs = 1.0f;
-                chunkWalkThrottleMs = 400;
+                cpuFactorMin = 0.30f;
+                targetFps = Math.min(targetFps, 45);
             } else if (cores >= 12) {
-                meshBudgetMs = 3.0f;
+                cpuFactorMin = 0.50f;
             }
-            Log.info("autoProfile: " + cores + " logical cores -> meshBudget="
-                    + trim(meshBudgetMs) + "ms, chunkWalkThrottle=" + chunkWalkThrottleMs + "ms");
+            Log.info("autoProfile: " + cores + " logical cores -> cpuFactorMin="
+                    + trim(cpuFactorMin) + ", targetFps=" + targetFps);
         }
     }
 
@@ -134,6 +119,7 @@ public final class Config {
                 Log.info("config change detected - reloading");
                 load();
                 FrameGovernor.applyAll("config reload");
+                ViewpointMemory.applyScale(Config.memoryScale);
             }
         } catch (Throwable ignored) {
         }
@@ -154,10 +140,9 @@ public final class Config {
     public static String describe() {
         return "governor=" + governor.name().toLowerCase()
                 + " targetFps=" + targetFps
-                + " scale=[" + trim(renderScaleMin) + ".." + trim(renderScaleMax) + "]"
-                + " meshBudget=" + trim(meshBudgetMs) + "ms"
-                + " walkThrottle=" + chunkWalkThrottleMs + "ms"
-                + " drawDistMin=" + trim(drawDistanceMin)
+                + " cpu[" + (cpuAdaptive ? "adaptive" : "off") + " >=" + trim(cpuFactorMin) + "]"
+                + " gpu[" + (gpuAdaptive ? "adaptive" : "off") + " >=" + trim(gpuFactorMin) + "]"
+                + " memoryScale=" + trim(memoryScale)
                 + " overlay=" + overlay
                 + " statsExport=" + statsExport
                 + " enabled=" + enabled;
@@ -168,19 +153,15 @@ public final class Config {
         m.put("enabled", String.valueOf(enabled));
         m.put("governor", governor.name().toLowerCase());
         m.put("targetFps", String.valueOf(targetFps));
-        m.put("dynamicResolution", String.valueOf(dynamicResolution));
-        m.put("renderScaleFixed", trim(renderScaleFixed));
-        m.put("renderScaleMin", trim(renderScaleMin));
-        m.put("renderScaleMax", trim(renderScaleMax));
-        m.put("shadowScaleFixed", trim(shadowScaleFixed));
-        m.put("meshBudgetEnabled", String.valueOf(meshBudgetEnabled));
-        m.put("meshBudgetMs", trim(meshBudgetMs));
+        m.put("cpuAdaptive", String.valueOf(cpuAdaptive));
+        m.put("gpuAdaptive", String.valueOf(gpuAdaptive));
+        m.put("cpuFactorMin", trim(cpuFactorMin));
+        m.put("gpuFactorMin", trim(gpuFactorMin));
+        m.put("cpuFactorFixed", trim(cpuFactorFixed));
+        m.put("gpuFactorFixed", trim(gpuFactorFixed));
+        m.put("memoryScale", trim(memoryScale));
         m.put("overlay", String.valueOf(overlay));
         m.put("overlayDetail", String.valueOf(overlayDetail));
-        m.put("drawDistanceAdaptive", String.valueOf(drawDistanceAdaptive));
-        m.put("drawDistanceMin", trim(drawDistanceMin));
-        m.put("chunkWalkThrottleEnabled", String.valueOf(chunkWalkThrottleEnabled));
-        m.put("chunkWalkThrottleMs", String.valueOf(chunkWalkThrottleMs));
         m.put("statsExport", String.valueOf(statsExport));
         m.put("deferToPZOpt", deferToPZOpt.name().toLowerCase());
         m.put("autoProfile", String.valueOf(autoProfile));

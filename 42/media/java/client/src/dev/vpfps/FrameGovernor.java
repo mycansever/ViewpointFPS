@@ -1,33 +1,29 @@
 package dev.vpfps;
 
 /**
- * The adaptive quality governor - the brain of the mod.
+ * The adaptive quality governor v3 — now driving Viewpoint's OWN settings.
  *
- * Every 500 ms it looks at the frame-time distribution measured by
- * Patch_GameWindow (plus Viewpoint's render and world-capture passes
- * measured by Patch_FP / Patch_FPCapture) and walks an independent
- * quality ladder per subsystem:
+ * Measured inputs:
+ *   - frame-time distribution from Patch_GameWindow (mean / p90 / p99)
+ *   - Viewpoint render-pass share from Patch_FP (GPU feed)
+ *   - Viewpoint world-capture share from Patch_FPCapture (game thread)
+ *   - Viewpoint's own GPU utilization via GpuStats (GpuBusy.percent())
  *
- *   render scale   0.50 .. 1.00   (GPU cost, Viewpoint render-scale knob)
- *   draw distance  0.70 .. 1.00   (chunk radius factor - fewer meshes, fewer draws)
- *   mesh budget    0.5 .. 8.0 ms  (game/worker-thread cost)
- *   shadow scale   0.50 .. 1.00   (GPU cost, Viewpoint shadow knob)
+ * Two independent factor ladders, applied through ViewpointKnobs inside
+ * Viewpoint's declared setting ranges (factor 1.0 = stock):
  *
- * WHAT it lowers first is decided by cost attribution - the same idea as
- * PZ_Optimization's GPU/game-thread busy split:
+ *   cpuFactor -> ChunkBuilds.BUILD_MAX / MAX_COOKING, ChunkWalk.AT_ONCE,
+ *                FarWorld.BUDGET / JOBS, FarShell.JOBS, FloorBakes.BUDGET,
+ *                ShellGround.BUDGET, FarGpu.UPLOAD_MB / CELL_UPLOAD_MB
+ *   gpuFactor -> FarWorld.REACH (draw distance) / DETAIL_1 / DETAIL_2 /
+ *                DETAIL_4, Corpses.LIMIT
  *
- *   - if Viewpoint's render pass eats >= 45% of the frame, the bottleneck
- *     is the GPU -> lower render scale first, then shadows
- *   - otherwise the bottleneck is the game thread -> shrink the invisible
- *     mesh budget first, then draw distance (visible pop-in), then scale
- *
- * Descending is immediate (frame times over budget annoy instantly);
- * climbing back up needs 3 consecutive stable windows (an oscillating
- * governor is worse than none). All steps clamp to the user's
- * [renderScaleMin, renderScaleMax] and [drawDistanceMin, 1.0] windows.
- *
- * v2.0: every decision window can be exported to Zomboid/vpfps-stats.csv
- * (statsExport=true) - a lightweight benchmark harness for the session.
+ * Attribution: GPU-bound (Viewpoint's GpuBusy >= 55% or our render-share
+ * >= 45%) lowers the GPU ladder first; game-thread-bound lowers the CPU
+ * ladder first. The invisible CPU knobs always go before anything the
+ * eye can see. Descending is immediate; climbing needs 3 stable windows.
+ * factor 1.0 restores Viewpoint's stock values exactly, and a stock value
+ * the user raised in Viewpoint's own UI is never fought.
  */
 public final class FrameGovernor {
 
@@ -36,13 +32,11 @@ public final class FrameGovernor {
     private static final int COOLDOWN_MS = 1000;
     private static final int STABLE_WINDOWS_TO_CLIMB = 3;
     private static final int WARMUP_FRAMES = 30;
-    private static final float GPU_BOUND_SHARE = 0.45f;
+    private static final float RENDER_SHARE_GPU_BOUND = 0.45f;
+    private static final float GPU_BUSY_THRESHOLD = 55f;
     private static final int EXPORT_INTERVAL_MS = 5000;
 
-    private static final float[] RENDER_SCALE_STEPS = {0.50f, 0.60f, 0.70f, 0.80f, 0.90f, 1.00f};
-    private static final float[] DRAW_DIST_STEPS   = {0.70f, 0.85f, 1.00f};
-    private static final float[] MESH_BUDGET_STEPS = {0.5f, 1.0f, 2.0f, 4.0f, 8.0f};
-    private static final float[] SHADOW_STEPS       = {0.50f, 0.75f, 1.00f};
+    private static final float[] FACTOR_STEPS = {0.30f, 0.40f, 0.50f, 0.60f, 0.70f, 0.80f, 0.90f, 1.00f};
 
     private static final Stats frameMs    = new Stats(FRAME_HISTORY);
     private static final Stats vpRenderMs = new Stats(FRAME_HISTORY);
@@ -55,16 +49,10 @@ public final class FrameGovernor {
     private static long lastChangeAt;
     private static long lastExportAt;
     private static int stableWindows;
-    private static int scaleIdx = RENDER_SCALE_STEPS.length - 1;
-    private static int drawDistIdx = DRAW_DIST_STEPS.length - 1;
-    private static int meshIdx;
-    private static int shadowIdx = SHADOW_STEPS.length - 1;
+    private static int cpuIdx = FACTOR_STEPS.length - 1;
+    private static int gpuIdx = FACTOR_STEPS.length - 1;
     private static String lastAction = "idle";
     private static boolean initialized;
-
-    static {
-        meshIdx = nearestIndex(MESH_BUDGET_STEPS, Config.meshBudgetMs);
-    }
 
     private FrameGovernor() {}
 
@@ -73,17 +61,19 @@ public final class FrameGovernor {
     public static void onFrameStart() {
         if (!initialized) {
             initialized = true;
-            ViewpointBridge.init();
+            ViewpointKnobs.ensureBound();
             PZOCompat.init();
             applyAll("initial apply");
         }
         frameStartNs = System.nanoTime();
-        MeshBudget.beginFrame();
     }
 
     public static void onFrameEnd() {
         frameMs.push((System.nanoTime() - frameStartNs) / 1_000_000f);
-        if (Config.enabled && Config.governor == Config.GovernorMode.ADAPTIVE) tick();
+        if (ViewpointKnobs.ensureBound()) {
+            // bind retry until Viewpoint's settings exist; then govern
+            if (Config.enabled && Config.governor == Config.GovernorMode.ADAPTIVE) tick();
+        }
         maybeExportStats();
     }
 
@@ -124,7 +114,7 @@ public final class FrameGovernor {
 
         if (p90 > budget * 1.20f) {
             stableWindows = 0;
-            stepDown(budget, p90, vpShare());
+            stepDown(budget, p90, gpuBound());
         } else if (mean < budget * 0.80f) {
             if (++stableWindows >= STABLE_WINDOWS_TO_CLIMB) {
                 stableWindows = 0;
@@ -135,17 +125,21 @@ public final class FrameGovernor {
         }
     }
 
-    private static void stepDown(float budget, float p90, float share) {
+    private static boolean gpuBound() {
+        float busy = GpuStats.gpuBusyPercent();
+        if (busy >= 0f) return busy >= GPU_BUSY_THRESHOLD;
+        return vpShare() >= RENDER_SHARE_GPU_BOUND;
+    }
+
+    private static void stepDown(float budget, float p90, boolean gpu) {
         String why = String.format("p90 %.1fms > %.1fms, %s",
-                p90, budget * 1.2f, share >= GPU_BOUND_SHARE ? "GPU-bound" : "game-thread-bound");
-        if (share >= GPU_BOUND_SHARE) {
-            if (scaleIdx > minScaleIdx())   { scaleIdx--;   applyRenderScale(why); return; }
-            if (shadowIdx > 0)              { shadowIdx--; applyShadow(why);      return; }
+                p90, budget * 1.2f, gpu ? "GPU-bound" : "game-thread-bound");
+        if (gpu) {
+            if (stepIdx(gpuIdx, ViewpointKnobs.GROUP_GPU, Config.gpuAdaptive, why, false)) return;
+            if (stepIdx(cpuIdx, ViewpointKnobs.GROUP_CPU, Config.cpuAdaptive, why, true)) return;
         } else {
-            // invisible savings first, then visible ones
-            if (meshIdx > 0)                { meshIdx--;   applyMesh(why);        return; }
-            if (drawDistIdx > minDrawIdx()) { drawDistIdx--; applyDrawDistance(why); return; }
-            if (scaleIdx > minScaleIdx())   { scaleIdx--;   applyRenderScale(why); return; }
+            if (stepIdx(cpuIdx, ViewpointKnobs.GROUP_CPU, Config.cpuAdaptive, why, false)) return;
+            if (stepIdx(gpuIdx, ViewpointKnobs.GROUP_GPU, Config.gpuAdaptive, why, true)) return;
         }
         lastAction = "at quality floor - " + why;
         Log.debug("governor: " + lastAction);
@@ -153,62 +147,42 @@ public final class FrameGovernor {
 
     private static void stepUp(float budget, float mean) {
         String why = String.format("mean %.1fms < %.1fms, stable", mean, budget * 0.8f);
-        // restore visible quality first, then headroom
-        if (drawDistIdx < DRAW_DIST_STEPS.length - 1) { drawDistIdx++; applyDrawDistance(why); return; }
-        if (meshIdx < MESH_BUDGET_STEPS.length - 1)   { meshIdx++;    applyMesh(why);   return; }
-        if (shadowIdx < SHADOW_STEPS.length - 1)      { shadowIdx++;  applyShadow(why); return; }
-        if (scaleIdx < maxScaleIdx())                 { scaleIdx++;   applyRenderScale(why); return; }
+        // restore the side the frame is NOT bound by first (cheapest visually)
+        boolean gpu = gpuBound();
+        if (!gpu) {
+            if (stepIdxUp(gpuIdx, ViewpointKnobs.GROUP_GPU, Config.gpuAdaptive, why)) return;
+            if (stepIdxUp(cpuIdx, ViewpointKnobs.GROUP_CPU, Config.cpuAdaptive, why)) return;
+        } else {
+            if (stepIdxUp(cpuIdx, ViewpointKnobs.GROUP_CPU, Config.cpuAdaptive, why)) return;
+            if (stepIdxUp(gpuIdx, ViewpointKnobs.GROUP_GPU, Config.gpuAdaptive, why)) return;
+        }
         lastAction = "at quality ceiling - " + why;
         Log.debug("governor: " + lastAction);
     }
 
-    private static void applyRenderScale(String why) {
-        float v = RENDER_SCALE_STEPS[scaleIdx];
-        if (!Config.dynamicResolution) {
-            lastAction = "dynamic resolution off - scale pinned at "
-                    + String.format("%.2f", Config.renderScaleFixed);
-            return;
-        }
-        if (ViewpointBridge.writeKnob("renderScale", v)) {
-            lastAction = String.format("render scale %.2f (%s)", v, why);
-            lastChangeAt = System.currentTimeMillis();
-            Log.info("governor: " + lastAction);
-        } else if (!ViewpointBridge.hasKnob("renderScale")) {
-            lastAction = "render-scale knob unavailable - mesh/draw-distance/shadow only (" + why + ")";
-        }
+    private static boolean stepIdx(int idx, String group, boolean adaptive, String why, boolean fallback) {
+        if (!adaptive) return false;
+        int minIdx = minIdx(group);
+        if (idx <= minIdx) return false;
+        idx--;
+        if (ViewpointKnobs.GROUP_GPU.equals(group)) gpuIdx = idx; else cpuIdx = idx;
+        apply(group, FACTOR_STEPS[idx], why + (fallback ? " (other side at floor)" : ""));
+        return true;
     }
 
-    private static void applyDrawDistance(String why) {
-        float f = DRAW_DIST_STEPS[drawDistIdx];
-        if (!Config.drawDistanceAdaptive) {
-            lastAction = "draw-distance adaptation off";
-            return;
-        }
-        if (ViewpointBridge.applyDrawDistanceFactor(f)) {
-            lastAction = String.format("draw distance %.2fx (%s)", f, why);
-            lastChangeAt = System.currentTimeMillis();
-            Log.info("governor: " + lastAction);
-        } else if (!ViewpointBridge.hasKnob("drawDistance")) {
-            lastAction = "draw-distance knob unavailable (" + why + ")";
-        }
+    private static boolean stepIdxUp(int idx, String group, boolean adaptive, String why) {
+        if (!adaptive) return false;
+        if (idx >= FACTOR_STEPS.length - 1) return false;
+        idx++;
+        if (ViewpointKnobs.GROUP_GPU.equals(group)) gpuIdx = idx; else cpuIdx = idx;
+        apply(group, FACTOR_STEPS[idx], why);
+        return true;
     }
 
-    private static void applyShadow(String why) {
-        float v = SHADOW_STEPS[shadowIdx];
-        if (ViewpointBridge.writeKnob("shadowScale", v)) {
-            lastAction = String.format("shadow scale %.2f (%s)", v, why);
-            lastChangeAt = System.currentTimeMillis();
-            Log.info("governor: " + lastAction);
-        } else if (!ViewpointBridge.hasKnob("shadowScale")) {
-            lastAction = "shadow knob unavailable (" + why + ")";
-        }
-    }
-
-    private static void applyMesh(String why) {
-        float v = MESH_BUDGET_STEPS[meshIdx];
-        MeshBudget.setBudgetMs(v);
-        Config.meshBudgetMs = v;
-        lastAction = String.format("mesh budget %.1fms (%s)", v, why);
+    private static void apply(String group, float factor, String why) {
+        int applied = ViewpointKnobs.applyFactor(group, factor);
+        lastAction = String.format("%s x%.2f (%d knobs) - %s",
+                group, factor, applied, why);
         lastChangeAt = System.currentTimeMillis();
         Log.info("governor: " + lastAction);
     }
@@ -216,31 +190,32 @@ public final class FrameGovernor {
     /** Apply the configured (non-adaptive) state - boot, config reload, Lua change. */
     public static void applyAll(String reason) {
         if (!Config.enabled) {
-            lastAction = "disabled - all hooks pass through";
-            MeshBudget.setBudgetMs(Float.MAX_VALUE / 4f);
+            lastAction = "disabled - restoring Viewpoint stock values";
+            ViewpointKnobs.restore(ViewpointKnobs.GROUP_CPU);
+            ViewpointKnobs.restore(ViewpointKnobs.GROUP_GPU);
             return;
         }
-        MeshBudget.setBudgetMs(Config.meshBudgetMs);
         switch (Config.governor) {
             case OFF:
+                ViewpointKnobs.restore(ViewpointKnobs.GROUP_CPU);
+                ViewpointKnobs.restore(ViewpointKnobs.GROUP_GPU);
+                lastAction = "governor off - Viewpoint stock values (" + reason + ")";
+                break;
             case FIXED:
-                ViewpointBridge.writeKnob("renderScale", Config.renderScaleFixed);
-                ViewpointBridge.writeKnob("shadowScale", Config.shadowScaleFixed);
-                ViewpointBridge.applyDrawDistanceFactor(1.0f);
-                scaleIdx = nearestIndex(RENDER_SCALE_STEPS, Config.renderScaleFixed);
-                drawDistIdx = DRAW_DIST_STEPS.length - 1;
-                meshIdx = nearestIndex(MESH_BUDGET_STEPS, Config.meshBudgetMs);
-                lastAction = (Config.governor == Config.GovernorMode.OFF
-                        ? "governor off" : "fixed mode")
-                        + " - scale " + String.format("%.2f", Config.renderScaleFixed)
-                        + " (" + reason + ")";
+                cpuIdx = nearestIdx(Config.cpuFactorFixed);
+                gpuIdx = nearestIdx(Config.gpuFactorFixed);
+                ViewpointKnobs.applyFactor(ViewpointKnobs.GROUP_CPU, Config.cpuFactorFixed);
+                ViewpointKnobs.applyFactor(ViewpointKnobs.GROUP_GPU, Config.gpuFactorFixed);
+                lastAction = String.format("fixed mode - cpu x%.2f gpu x%.2f (%s)",
+                        Config.cpuFactorFixed, Config.gpuFactorFixed, reason);
                 break;
             case ADAPTIVE:
             default:
-                meshIdx = nearestIndex(MESH_BUDGET_STEPS, Config.meshBudgetMs);
-                clampScaleIdx();
-                clampDrawIdx();
-                applyRenderScale("adaptive mode (" + reason + ")");
+                clampIdx();
+                // start from stock, adapt from there
+                ViewpointKnobs.restore(ViewpointKnobs.GROUP_CPU);
+                ViewpointKnobs.restore(ViewpointKnobs.GROUP_GPU);
+                lastAction = "adaptive mode armed (" + reason + ")";
                 break;
         }
     }
@@ -253,8 +228,8 @@ public final class FrameGovernor {
         if (now - lastExportAt < EXPORT_INTERVAL_MS) return;
         lastExportAt = now;
         StatsExporter.writeRow(fps(), frameMean(), frameMs.percentile(0.90f), frameP99(),
-                vpRenderMs.mean(), captureMs.mean(), renderScale(), drawDistanceFactor(),
-                shadowScale(), MeshBudget.budget());
+                GpuStats.gpuBusyPercent(), vpRenderMs.mean(), captureMs.mean(),
+                cpuFactor(), gpuFactor());
     }
 
     // ---- queries for Bridge / Overlay ----
@@ -264,34 +239,31 @@ public final class FrameGovernor {
         return m > 0.01f ? 1000f / m : 0f;
     }
 
-    /** 1%-low approximation: inverse of the p99 frame time. */
     public static float fpsOnePercentLow() {
         float p = frameP99();
         return p > 0.01f ? 1000f / p : 0f;
     }
 
-    public static float frameMean()     { return frameMs.mean(); }
-    public static float frameP99()      { return frameMs.percentile(0.99f); }
-    public static float vpRenderMean()  { return vpRenderMs.mean(); }
-    public static float captureMean()   { return captureMs.mean(); }
+    public static float frameMean()    { return frameMs.mean(); }
+    public static float frameP99()     { return frameMs.percentile(0.99f); }
+    public static float vpRenderMean() { return vpRenderMs.mean(); }
+    public static float captureMean()  { return captureMs.mean(); }
 
-    /** Viewpoint render pass share of the total frame (0..1). */
     public static float vpShare() {
         float f = frameMs.mean();
         if (f < 0.01f) return 0f;
         return Math.max(0f, Math.min(1f, vpRenderMs.mean() / f));
     }
 
-    public static float renderScale()      { return RENDER_SCALE_STEPS[scaleIdx]; }
-    public static float shadowScale()      { return SHADOW_STEPS[shadowIdx]; }
-    public static float drawDistanceFactor() { return DRAW_DIST_STEPS[drawDistIdx]; }
-    public static String lastAction()      { return lastAction; }
+    public static float cpuFactor() { return FACTOR_STEPS[cpuIdx]; }
+    public static float gpuFactor() { return FACTOR_STEPS[gpuIdx]; }
+    public static String lastAction() { return lastAction; }
 
     public static String status() {
         return String.format(
-                "fps %.1f | frame %.1fms | p99 %.1fms | vp-render %.1fms (%.0f%%) | capture %.1fms | %s",
-                fps(), frameMean(), frameP99(), vpRenderMean(), vpShare() * 100f,
-                captureMean(), lastAction);
+                "fps %.1f | frame %.1fms | p99 %.1fms | gpu-busy %.0f%% | vp-render %.1fms | capture %.1fms | cpu x%.2f gpu x%.2f | %s",
+                fps(), frameMean(), frameP99(), GpuStats.gpuBusyPercent(),
+                vpRenderMs.mean(), captureMs.mean(), cpuFactor(), gpuFactor(), lastAction);
     }
 
     // ---- helpers ----
@@ -300,41 +272,25 @@ public final class FrameGovernor {
         return 1000f / Math.max(15, Config.targetFps);
     }
 
-    private static int minScaleIdx() {
-        for (int i = 0; i < RENDER_SCALE_STEPS.length; i++) {
-            if (RENDER_SCALE_STEPS[i] >= Config.renderScaleMin - 0.001f) return i;
+    private static int minIdx(String group) {
+        float floor = ViewpointKnobs.GROUP_GPU.equals(group)
+                ? Config.gpuFactorMin : Config.cpuFactorMin;
+        for (int i = 0; i < FACTOR_STEPS.length; i++) {
+            if (FACTOR_STEPS[i] >= floor - 0.001f) return i;
         }
-        return RENDER_SCALE_STEPS.length - 1;
+        return FACTOR_STEPS.length - 1;
     }
 
-    private static int maxScaleIdx() {
-        int idx = RENDER_SCALE_STEPS.length - 1;
-        for (int i = 0; i < RENDER_SCALE_STEPS.length; i++) {
-            if (RENDER_SCALE_STEPS[i] <= Config.renderScaleMax + 0.001f) idx = i;
-        }
-        return Math.max(idx, minScaleIdx());
+    private static void clampIdx() {
+        cpuIdx = Math.max(minIdx(ViewpointKnobs.GROUP_CPU), Math.min(FACTOR_STEPS.length - 1, cpuIdx));
+        gpuIdx = Math.max(minIdx(ViewpointKnobs.GROUP_GPU), Math.min(FACTOR_STEPS.length - 1, gpuIdx));
     }
 
-    private static int minDrawIdx() {
-        for (int i = 0; i < DRAW_DIST_STEPS.length; i++) {
-            if (DRAW_DIST_STEPS[i] >= Config.drawDistanceMin - 0.001f) return i;
-        }
-        return DRAW_DIST_STEPS.length - 1;
-    }
-
-    private static void clampScaleIdx() {
-        scaleIdx = Math.max(minScaleIdx(), Math.min(maxScaleIdx(), scaleIdx));
-    }
-
-    private static void clampDrawIdx() {
-        drawDistIdx = Math.max(minDrawIdx(), Math.min(DRAW_DIST_STEPS.length - 1, drawDistIdx));
-    }
-
-    private static int nearestIndex(float[] steps, float v) {
+    private static int nearestIdx(float v) {
         int best = 0;
         float bestD = Float.MAX_VALUE;
-        for (int i = 0; i < steps.length; i++) {
-            float d = Math.abs(steps[i] - v);
+        for (int i = 0; i < FACTOR_STEPS.length; i++) {
+            float d = Math.abs(FACTOR_STEPS[i] - v);
             if (d < bestD) {
                 bestD = d;
                 best = i;

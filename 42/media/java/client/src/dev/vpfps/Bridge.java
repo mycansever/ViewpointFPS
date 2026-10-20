@@ -1,18 +1,15 @@
 package dev.vpfps;
 
 /**
- * Static facade exposed to Lua as the global "VPFPSBridge"
- * (via PZ's ClassExposer, see Main.exposeLuaBridge).
+ * Static facade exposed to Lua as the global "VPFPSBridge".
  *
  * Lua-facing contract:
  *   - only double / boolean / String parameters and returns (Kahlua maps
- *     Lua numbers to Double - float/int params would break the call)
- *   - every method swallows its exceptions: a Lua call can never crash
- *     the game, worst case it returns a safe default
+ *     Lua numbers to Double)
+ *   - every method swallows its exceptions; worst case a safe default
  *
- * The Lua side (42/media/lua/client/VPFPS/) uses this for the ModOptions
- * integration and the keybind; the Java side runs standalone if the
- * bridge is unavailable.
+ * v3.0 surface: governor control, Viewpoint's own settings via factor
+ * ladders, memory-pool scaling, in-game frame-cap control, live stats.
  */
 public final class Bridge {
 
@@ -24,104 +21,46 @@ public final class Bridge {
         return "vpfps-" + Main.VERSION;
     }
 
-    public static boolean isViewpointPresent() {
-        return ViewpointBridge.isPresent();
+    public static String getVersion() {
+        return Main.VERSION;
     }
 
     public static String getCapabilities() {
-        return ViewpointBridge.capabilities();
+        return ViewpointKnobs.statusShort() + " | " + ViewpointMemory.statusShort()
+                + " | frameCap " + (FrameCapControl.isAvailable() ? "available" : "unavailable");
     }
 
     public static String getStatus() {
         return FrameGovernor.status();
     }
 
-    public static double getFps() {
-        return FrameGovernor.fps();
+    public static String getKnobDump() {
+        return ViewpointKnobs.describe();
     }
 
-    public static double getFrameTimeMs() {
-        return FrameGovernor.frameMean();
-    }
-
-    public static double getFrameTimeP99Ms() {
-        return FrameGovernor.frameP99();
-    }
-
-    public static double getVpRenderShare() {
-        return FrameGovernor.vpShare();
-    }
-
-    public static double getRenderScale() {
-        return FrameGovernor.renderScale();
-    }
-
-    public static double getDrawDistanceFactor() {
-        return FrameGovernor.drawDistanceFactor();
+    public static String getMemoryDump() {
+        return ViewpointMemory.describe();
     }
 
     public static String getCompatibility() {
         return PZOCompat.status();
     }
 
-    // ---- v2.0 live settings ----
+    // ---- live stats (for the panel header) ----
 
-    public static void setDrawDistanceAdaptive(boolean v) {
-        Config.drawDistanceAdaptive = v;
-        Config.save();
-        if (!v) FrameGovernor.applyAll("lua");
-    }
+    public static double getFps()               { return FrameGovernor.fps(); }
+    public static double getFpsOnePercentLow()  { return FrameGovernor.fpsOnePercentLow(); }
+    public static double getFrameTimeMs()       { return FrameGovernor.frameMean(); }
+    public static double getFrameTimeP99Ms()    { return FrameGovernor.frameP99(); }
+    public static double getGpuBusyPercent()    { return GpuStats.gpuBusyPercent(); }
+    public static double getVpRenderShare()     { return FrameGovernor.vpShare(); }
+    public static double getCpuFactor()         { return FrameGovernor.cpuFactor(); }
+    public static double getGpuFactor()         { return FrameGovernor.gpuFactor(); }
+    public static double getVramFreeMiB()       { return ViewpointMemory.vramFreeMiB(); }
+    public static double getVramTotalMiB()      { return ViewpointMemory.vramTotalMiB(); }
+    public static double getVramEvictions()     { return ViewpointMemory.vramEvictions(); }
 
-    public static boolean isDrawDistanceAdaptive() {
-        return Config.drawDistanceAdaptive;
-    }
-
-    public static void setDrawDistanceMin(double v) {
-        Config.drawDistanceMin = (float) Math.max(0.40, Math.min(1.0, v));
-        Config.save();
-    }
-
-    public static double getDrawDistanceMin() {
-        return Config.drawDistanceMin;
-    }
-
-    public static void setChunkWalkThrottle(boolean v) {
-        Config.chunkWalkThrottleEnabled = v;
-        Config.save();
-    }
-
-    public static boolean isChunkWalkThrottle() {
-        return Config.chunkWalkThrottleEnabled;
-    }
-
-    public static void setChunkWalkThrottleMs(double v) {
-        Config.chunkWalkThrottleMs = (int) Math.max(50, Math.min(2000, Math.round(v)));
-        Config.save();
-    }
-
-    public static double getChunkWalkThrottleMs() {
-        return Config.chunkWalkThrottleMs;
-    }
-
-    public static void setStatsExport(boolean v) {
-        Config.statsExport = v;
-        Config.save();
-    }
-
-    public static boolean isStatsExport() {
-        return Config.statsExport;
-    }
-
-    public static void setOverlayDetail(boolean v) {
-        Config.overlayDetail = v;
-        Config.save();
-    }
-
-    public static boolean isOverlayDetail() {
-        return Config.overlayDetail;
-    }
-
-    // ---- live settings (all persisted to vpfps.properties) ----
+    // ---- governor settings ----
 
     public static void setEnabled(boolean v) {
         Config.enabled = v;
@@ -133,34 +72,16 @@ public final class Bridge {
         return Config.enabled;
     }
 
-    public static void setAdaptive(boolean v) {
-        Config.governor = v ? Config.GovernorMode.ADAPTIVE : Config.GovernorMode.FIXED;
+    public static void setGovernor(String mode) {
+        Config.governor = "adaptive".equalsIgnoreCase(mode) ? Config.GovernorMode.ADAPTIVE
+                : "off".equalsIgnoreCase(mode) ? Config.GovernorMode.OFF
+                : Config.GovernorMode.FIXED;
         Config.save();
         FrameGovernor.applyAll("lua");
     }
 
-    public static boolean isAdaptive() {
-        return Config.governor == Config.GovernorMode.ADAPTIVE;
-    }
-
-    public static void setDynamicResolution(boolean v) {
-        Config.dynamicResolution = v;
-        Config.save();
-        FrameGovernor.applyAll("lua");
-    }
-
-    public static boolean isDynamicResolution() {
-        return Config.dynamicResolution;
-    }
-
-    public static void setMeshBudgetEnabled(boolean v) {
-        Config.meshBudgetEnabled = v;
-        Config.save();
-        FrameGovernor.applyAll("lua");
-    }
-
-    public static boolean isMeshBudgetEnabled() {
-        return Config.meshBudgetEnabled;
+    public static String getGovernor() {
+        return Config.governor.name().toLowerCase();
     }
 
     public static void setTargetFps(double v) {
@@ -172,37 +93,114 @@ public final class Bridge {
         return Config.targetFps;
     }
 
-    public static void setRenderScaleFixed(double v) {
-        Config.renderScaleFixed = (float) Math.max(0.25, Math.min(1.0, v));
+    public static void setCpuAdaptive(boolean v) {
+        Config.cpuAdaptive = v;
         Config.save();
-        if (!isAdaptive()) FrameGovernor.applyAll("lua");
+        FrameGovernor.applyAll("lua");
     }
 
-    public static double getRenderScaleFixed() {
-        return Config.renderScaleFixed;
+    public static boolean isCpuAdaptive() {
+        return Config.cpuAdaptive;
     }
 
-    public static void setRenderScaleMin(double v) {
-        Config.renderScaleMin = (float) Math.max(0.25, Math.min(1.0, v));
-        if (Config.renderScaleMin > Config.renderScaleMax) {
-            Config.renderScaleMin = Config.renderScaleMax;
-        }
+    public static void setGpuAdaptive(boolean v) {
+        Config.gpuAdaptive = v;
+        Config.save();
+        FrameGovernor.applyAll("lua");
+    }
+
+    public static boolean isGpuAdaptive() {
+        return Config.gpuAdaptive;
+    }
+
+    public static void setCpuFactorMin(double v) {
+        Config.cpuFactorMin = (float) Math.max(0.10, Math.min(1.0, v));
         Config.save();
     }
 
-    public static double getRenderScaleMin() {
-        return Config.renderScaleMin;
+    public static double getCpuFactorMin() {
+        return Config.cpuFactorMin;
     }
 
-    public static void setMeshBudgetMs(double v) {
-        Config.meshBudgetMs = (float) Math.max(0.1, Math.min(16.0, v));
+    public static void setGpuFactorMin(double v) {
+        Config.gpuFactorMin = (float) Math.max(0.10, Math.min(1.0, v));
         Config.save();
-        if (!isAdaptive()) MeshBudget.setBudgetMs(Config.meshBudgetMs);
     }
 
-    public static double getMeshBudgetMs() {
-        return Config.meshBudgetMs;
+    public static double getGpuFactorMin() {
+        return Config.gpuFactorMin;
     }
+
+    public static void setCpuFactorFixed(double v) {
+        Config.cpuFactorFixed = (float) Math.max(0.10, Math.min(1.0, v));
+        Config.save();
+        if (Config.governor == Config.GovernorMode.FIXED) FrameGovernor.applyAll("lua");
+    }
+
+    public static double getCpuFactorFixed() {
+        return Config.cpuFactorFixed;
+    }
+
+    public static void setGpuFactorFixed(double v) {
+        Config.gpuFactorFixed = (float) Math.max(0.10, Math.min(1.0, v));
+        Config.save();
+        if (Config.governor == Config.GovernorMode.FIXED) FrameGovernor.applyAll("lua");
+    }
+
+    public static double getGpuFactorFixed() {
+        return Config.gpuFactorFixed;
+    }
+
+    /** Restore every Viewpoint setting we touched to its stock value. */
+    public static void restoreStock() {
+        ViewpointKnobs.restore(ViewpointKnobs.GROUP_CPU);
+        ViewpointKnobs.restore(ViewpointKnobs.GROUP_GPU);
+        ViewpointMemory.restore();
+    }
+
+    // ---- memory pools (RAM / VRAM) ----
+
+    public static void setMemoryScale(double v) {
+        Config.memoryScale = (float) Math.max(0.30, Math.min(2.0, v));
+        Config.save();
+        ViewpointMemory.applyScale(Config.memoryScale);
+    }
+
+    public static double getMemoryScale() {
+        return Config.memoryScale;
+    }
+
+    // ---- in-game frame cap (Viewpoint's FrameCaps) ----
+
+    public static boolean isFrameCapAvailable() {
+        return FrameCapControl.isAvailable();
+    }
+
+    public static double getGameCap() {
+        return FrameCapControl.gameCap();
+    }
+
+    public static double getMenuCap() {
+        return FrameCapControl.menuCap();
+    }
+
+    public static boolean setGameCap(double fps) {
+        return FrameCapControl.setGameCap(fps);
+    }
+
+    public static boolean setMenuCap(double fps) {
+        return FrameCapControl.setMenuCap(fps);
+    }
+
+    public static boolean uncapGame() {
+        return FrameCapControl.uncapGame();
+    }
+
+    public static double getUncappedValue() {
+        return FrameCapControl.uncapped();
+    }
+
+    // ---- overlay / misc ----
 
     public static void setOverlayEnabled(boolean v) {
         Config.overlay = v;
@@ -211,6 +209,24 @@ public final class Bridge {
 
     public static boolean isOverlayEnabled() {
         return Config.overlay;
+    }
+
+    public static void setOverlayDetail(boolean v) {
+        Config.overlayDetail = v;
+        Config.save();
+    }
+
+    public static boolean isOverlayDetail() {
+        return Config.overlayDetail;
+    }
+
+    public static void setStatsExport(boolean v) {
+        Config.statsExport = v;
+        Config.save();
+    }
+
+    public static boolean isStatsExport() {
+        return Config.statsExport;
     }
 
     public static void setDebug(boolean v) {

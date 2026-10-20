@@ -8,12 +8,10 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Lightweight benchmark harness: appends one CSV row per stats window so a
- * session can be analysed afterwards (spreadsheet-friendly, the same spirit
- * as PZ_Optimization's run logs, built independently).
- *
+ * Lightweight benchmark harness: appends one CSV row per stats window.
  * Output: <user>\Zomboid\vpfps-stats.csv
- * Enable: statsExport=true (or the ModOptions tick box).
+ * Columns: timestamp, fps, mean/p90/p99 ms, gpuBusy%, vpRenderMs, captureMs,
+ *          cpuFactor, gpuFactor.
  */
 public final class StatsExporter {
 
@@ -27,22 +25,21 @@ public final class StatsExporter {
     private StatsExporter() {}
 
     public static void writeRow(float fps, float meanMs, float p90Ms, float p99Ms,
-                                float vpRenderMs, float captureMs, float renderScale,
-                                float drawDistFactor, float shadowScale, float meshBudgetMs) {
+                                float gpuBusyPct, float vpRenderMs, float captureMs,
+                                float cpuFactor, float gpuFactor) {
         if (!Config.enabled || !Config.statsExport) return;
         guard.run(() -> {
             boolean newFile = !Files.exists(FILE);
             StringBuilder sb = new StringBuilder(160);
             if (newFile) {
                 sb.append("timestamp,fps,frame_mean_ms,frame_p90_ms,frame_p99_ms,")
-                  .append("vp_render_ms,world_capture_ms,render_scale,draw_dist_factor,")
-                  .append("shadow_scale,mesh_budget_ms")
+                  .append("gpu_busy_pct,vp_render_ms,world_capture_ms,cpu_factor,gpu_factor")
                   .append(System.lineSeparator());
             }
             sb.append(TS.format(LocalDateTime.now())).append(',')
-              .append(String.format("%.1f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f",
-                      fps, meanMs, p90Ms, p99Ms, vpRenderMs, captureMs,
-                      renderScale, drawDistFactor, shadowScale, meshBudgetMs))
+              .append(String.format("%.1f,%.2f,%.2f,%.2f,%.0f,%.2f,%.2f,%.2f,%.2f",
+                      fps, meanMs, p90Ms, p99Ms, gpuBusyPct, vpRenderMs, captureMs,
+                      cpuFactor, gpuFactor))
               .append(System.lineSeparator());
             Files.createDirectories(FILE.getParent());
             Files.writeString(FILE, sb.toString(), StandardCharsets.UTF_8,

@@ -20,14 +20,13 @@ An adaptive performance layer for [b]Project Viewpoint[/b] — the first/third-p
 [h1]⚡ What it does[/h1]
 
 [list]
-[*][b]Chunk mesh budget[/b] — kills the multi-frame freezes caused by stacked chunk-mesh rebuilds while streaming chunks (driving at 120 km/h, spinning the camera). Sets a per-frame time budget (default 2 ms); leftover chunks simply rebuild next frame.
-[*][b]Adaptive quality governor[/b] — every 500 ms it reads the frame-time distribution (p90 / mean) and walks independent quality ladders: render scale, shadow scale, mesh budget. Quality drops instantly; recovery needs 3 stable windows, so it never oscillates.
-[*][b]GPU vs CPU attribution[/b] — measures Viewpoint's own render pass. GPU-bound? Resolution and shadows go down first. Game-thread-bound? The mesh budget shrinks first. Lowering the wrong thing gains nothing — this mod doesn't do that.
-[*][b]Dynamic resolution[/b] — under GPU pressure, scales Viewpoint's internal render resolution inside your configured window (default 0.50–1.00).
-[*][b]Idle chunk-walk throttle[/b] — while you stand still (looting, fighting, crafting) Viewpoint still re-scans its chunks every frame. This limits that scan to a few per second when idle and restores full rate the instant you move — free game-thread time the vanilla settings can never give you.
-[*][b]Adaptive draw distance[/b] — a fourth governor ladder that scales Viewpoint's chunk/draw distance (0.70–1.00x of its stock value) under game-thread pressure. Fewer chunks = fewer meshes and draws. The stock baseline is remembered and ratchets up if you raise Viewpoint's own setting, so the governor never fights you.
-[*][b]Live stats overlay[/b] — fps, 1% low, frame time, p99, VP render share, capture time, mesh stats and governor state. Toggle with [b]F9[/b] (rebindable). Color-coded by health.
-[*][b]Benchmark CSV export[/b] — optional fps/p90/p99/render-share log appended to Zomboid\vpfps-stats.csv every 5 seconds.
+[*][b]Drives Viewpoint's own settings[/b] — two adaptive quality ladders (CPU / GPU) scale Viewpoint's real tuning values inside their own declared ranges: chunk build budgets, chunk walk rate, far-world budget and jobs, draw distance, far detail levels, corpse models. [b]Factor 1.0 = stock[/b]; raise a value in Viewpoint's own settings and the governor respects it.
+[*][b]GPU vs CPU attribution[/b] — reads Viewpoint's own GPU utilization and per-pass GPU timers. GPU-bound lowers distance/detail first; game-thread-bound lowers build/walk budgets first. The overlay even shows the top render passes by GPU time.
+[*][b]In-game FPS cap control[/b] — game cap, menu cap and a one-click [b]UNCAP[/b], in-game. No more editing files to remove the frame limit.
+[*][b]RAM / VRAM control[/b] — Viewpoint's memory pools (near meshes, far world, shells, models, corpses...) scaled in-game through one budget factor, with a live VRAM readout.
+[*][b]F8 settings panel[/b] — a full in-game panel: live stats (fps, 1% low, GPU busy, VRAM), governor controls, frame cap, memory, overlay options. Everything adjustable without touching a file.
+[*][b]Live stats overlay[/b] — fps, 1% low, frame time, p99, GPU busy, VP render share, top GPU passes, memory factors. Toggle with [b]F9[/b] (rebindable). Color-coded by health.
+[*][b]Benchmark CSV export[/b] — optional fps/p90/p99/GPU-busy/factor log appended to Zomboid\vpfps-stats.csv every 5 seconds.
 [*][b]PZ_Optimization compatible[/b] — detects xD3I's PZ_Optimization at runtime and stacks cleanly with it (their class overrides + our runtime hooks). Our overlay steps aside for theirs when both are installed. No code is shared (PZO carries no open license; techniques only, reimplemented independently).
 [*][b]Cannot crash your game[/b] — Viewpoint is alpha and updates often, so this mod [b]never hard-references Viewpoint's classes[/b]. Everything is discovered at runtime via reflection. If a Viewpoint update renames a field, the related optimization reports "unavailable" and everything else keeps working. Every feature has a kill switch.
 [/list]
@@ -94,14 +93,13 @@ Project Zomboid [b]Build 42.21[/b]'deki [b]Project Viewpoint[/b] (first/third-pe
 [h1]⚡ Ne yapar?[/h1]
 
 [list]
-[*][b]Chunk mesh bütçesi[/b] — Viewpoint chunk akıtırken (120 km/h'de araba kullanırken, hızlı dönüşlerde) mesh rebuild'lerin üst üste binmesiyle oluşan çok frame'lik donmaları ortadan kaldırır. Frame başına zaman bütçesi (varsayılan 2 ms) koyar; bütçe dolunca kalan chunk'lar bir sonraki frame'e ertelenir.
-[*][b]Adaptif kalite governor'ı[/b] — Her 500 ms'de frame-time dağılımını okur (p90/ortalama) ve render scale, gölge kalitesi, mesh bütçesi merdivenlerinde otomatik iner/çıkar. Kalite düşürme anında; geri yükseltme 3 stabil pencere gerektirir (git-gel yok).
-[*][b]GPU / CPU darboğaz tespiti[/b] — Viewpoint'ın render pass'inin frame'den aldığı payı ölçer. Darboğaz GPU'daysa önce çözünürlük/gölge düşer, game thread'deyse önce mesh bütçesi. Yanlış şeyi kısmanın faydası yoktur — bu mod bunu yapmaz.
-[*][b]Dinamik çözünürlük[/b] — GPU yükü yüksekken Viewpoint'ın dahili render çözünürlüğünü ayarladığın aralıkta (varsayılan 0.50–1.00) ölçekler.
-[*][b]Idle chunk-walk throttle[/b] — olduğun yerde dururken (yağmalama, dövüş, craft) Viewpoint chunk'larını her frame yeniden tarar. Bu, durgunken taramayı saniyede birkaç kezle sınırlar; hareket ettiğin an tam hız geri döner — vanilla ayarlarının asla veremeyeceği bedava game-thread zamanı.
-[*][b]Adaptif draw distance[/b] — governor'a dördüncü merdiven: game-thread baskısında Viewpoint'ın chunk/draw mesafesini (stok değerinin 0.70–1.00 katı) ölçekler. Daha az chunk = daha az mesh, daha az draw. Stok baseline hatırlanır ve sen Viewpoint'ın kendi ayarını yükseltirsen yukarı çekilir — governor seninle asla kavga etmez.
-[*][b]Canlı istatistik overlay'i[/b] — FPS, 1% low, frame time, p99, VP render payı, capture süresi, mesh istatistikleri ve governor durumu. [b]F9[/b] ile açılır/kapanır (tuş değiştirilebilir), duruma göre renklenir.
-[*][b]Benchmark CSV export[/b] — opsiyonel: her 5 saniyede fps/p90/p99/render-payı satırları Zomboid\vpfps-stats.csv dosyasına yazılır.
+[*][b]Viewpoint'ın kendi ayarlarını sürer[/b] — iki adaptif kalite merdiveni (CPU / GPU), Viewpoint'ın gerçek ayar değerlerini kendi beyan ettiği aralıklar içinde ölçekler: chunk build bütçeleri, chunk walk hızı, uzak dünya bütçesi ve işleri, çizim mesafesi, uzak detay seviyeleri, ceset modelleri. [b]Faktör 1.0 = stok değer[/b]; Viewpoint'ın kendi ayarlarında yükselttiğin değere governor asla karışmaz.
+[*][b]GPU / CPU darboğaz tespiti[/b] — Viewpoint'ın kendi GPU doluluk ölçümünü ve pass başına GPU zamanlayıcılarını okur. Darboğaz GPU'daysa önce mesafe/detay düşer; game thread'deyse önce build/walk bütçeleri. Overlay, en çok GPU zamanı harcayan render pass'lerini bile gösterir.
+[*][b]Oyun içi FPS sınırı[/b] — oyun sınırı, menü sınırı ve tek tıkla [b]UNCAP[/b], hepsi oyun içinde. Frame sınırını kaldırmak için artık dosya düzenlemeye gerek yok.
+[*][b]RAM / VRAM kontrolü[/b] — Viewpoint'ın bellek havuzları (yakın mesh'ler, uzak dünya, kabuklar, modeller, cesetler...) tek bütçe faktörüyle oyun içinde ölçeklenir; canlı VRAM göstergesiyle.
+[*][b]F8 ayar paneli[/b] — tam oyun içi panel: canlı istatistikler (fps, 1% low, GPU doluluğu, VRAM), governor kontrolleri, FPS sınırı, bellek, overlay seçenekleri. Bir dosyaya dokunmadan her şey ayarlanabilir.
+[*][b]Canlı istatistik overlay'i[/b] — FPS, 1% low, frame time, p99, GPU doluluğu, VP render payı, en ağır GPU pass'leri, bellek faktörleri. [b]F9[/b] ile açılır/kapanır (tuş değiştirilebilir), duruma göre renklenir.
+[*][b]Benchmark CSV export[/b] — opsiyonel: her 5 saniyede fps/p90/p99/GPU-doluluğu/faktör satırları Zomboid\vpfps-stats.csv dosyasına yazılır.
 [*][b]PZ_Optimization uyumlu[/b] — xD3I'nin PZ_Optimization modunu runtime'da algılar ve sorunsuz üst üste biner (onların class override'ları + bizim runtime hook'larımız). İkisi de kuruluysa bizim overlay onlarınkinin yerine geçmez (kenara çekilir). Kod paylaşımı yoktur (PZO açık lisans taşımaz; sadece teknikler, bağımsız yeniden implementasyon).
 [*][b]Crash edemez[/b] — Viewpoint alpha bir mod ve sık güncelleniyor. Bu mod Viewpoint sınıflarını [b]hiç doğrudan referans etmez[/b]; her şey reflection ile runtime'da keşfedilir. Bir güncelleme alan isimlerini değiştirirse ilgili optimize "unavailable" raporlar ve diğer her şey çalışmaya devam eder. Her özelliğin kill switch'i vardır.
 [/list]

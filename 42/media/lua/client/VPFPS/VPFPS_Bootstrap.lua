@@ -1,23 +1,25 @@
 --[[---------------------------------------------------------------------------
-    Viewpoint FPS Optimization v1.0.0 - client bootstrap
+    Viewpoint FPS Optimization v3.0.0 - client bootstrap
     Target: Project Zomboid Build 42.21 + Project Viewpoint (via ZombieBuddy)
 
-    This file wires the Lua side to the Java side (global "VPFPSBridge",
-    exposed by dev.vpfps.Main through PZ's ClassExposer). If the bridge is
-    not reachable the Java side still runs standalone - tuning then happens
-    by editing  <user>\Zomboid\vpfps.properties  (hot-reloads in ~5 s).
+    Keys (rebindable in Options > MODS):
+      F9  - toggle the performance overlay
+      F8  - toggle the in-game settings panel (governor, frame cap, memory)
+
+    NOTE: do not bind F10 - Windows opens the window menu on F10 and freezes
+    the rendered frame (an OS behaviour, not caused by this mod).
 ---------------------------------------------------------------------------]]--
 
 VPFPS = VPFPS or {}
 VPFPS.MOD_ID = "ViewpointFPS"
-VPFPS.VERSION = "2.0.0"
+VPFPS.VERSION = "3.0.0"
 
 local bridge, bridgeWarned = nil, false
 
 --- Returns the Java bridge table, or nil when unavailable.
 function VPFPS.getBridge()
     if bridge ~= nil then return bridge end
-    local ok, b = pcall(function() return VPFFSBridge end)
+    local ok, b = pcall(function() return VPFPSBridge end)
     if ok and b ~= nil then
         bridge = b
         return bridge
@@ -53,44 +55,52 @@ local function isViewpointActive()
 end
 
 -- ---------------------------------------------------------------------------
--- keybind: toggle the overlay (default F9, rebindable in Options > MODS)
+-- keys: F9 overlay, F8 panel
 -- ---------------------------------------------------------------------------
 
 local function onKeyToggle(key)
     local opts = VPFPS.options
-    if opts == nil or opts.overlayKey == nil then return end
+    if opts == nil then return end
 
-    local bound
-    local ok, v = pcall(function() return opts.overlayKey:getValue() end)
-    bound = ok and v or nil
-    if bound == nil or key ~= bound then return end
-
-    local b = VPFPS.getBridge()
-    if b then
-        local on = b.isOverlayEnabled()
-        if on ~= nil then
-            b.setOverlayEnabled(not on)
-            return
-        end
+    local function keyValue(opt)
+        if opt == nil then return nil end
+        local ok, v = pcall(function() return opt:getValue() end)
+        if ok then return v end
+        return nil
     end
-    print("[VPFPS] overlay toggle needs the Java bridge (or set overlay=... in vpfps.properties)")
+
+    -- overlay toggle
+    local overlayKey = keyValue(opts.overlayKey)
+    if overlayKey ~= nil and key == overlayKey then
+        local b = VPFPS.getBridge()
+        if b then
+            local on = b.isOverlayEnabled()
+            if on ~= nil then b.setOverlayEnabled(not on) end
+        end
+        return
+    end
+
+    -- panel toggle
+    local panelKey = keyValue(opts.panelKey)
+    if panelKey ~= nil and key == panelKey then
+        if VPFPS.togglePanel then VPFPS.togglePanel() end
+        return
+    end
 end
 
--- OnKeyStartPressed fires once per physical press (no auto-repeat);
--- fall back to OnKeyPressed on builds where it does not exist.
+-- OnKeyStartPressed fires once per physical press (no auto-repeat)
 local keyEvent = Events.OnKeyStartPressed or Events.OnKeyPressed
 if keyEvent then keyEvent.Add(onKeyToggle) end
 
 -- ---------------------------------------------------------------------------
--- session start: report status once
+-- session start: report status once, bind memory pools early
 -- ---------------------------------------------------------------------------
 
 Events.OnGameStart.Add(function()
     local b = VPFPS.getBridge()
     if b then
         print("[VPFPS] bridge online: " .. tostring(b.ping()))
-        print("[VPFPS] Viewpoint detected: " .. tostring(b.isViewpointPresent()))
-        print("[VPFPS] capabilities: " .. tostring(b.getCapabilities()))
+        print("[VPFPS] Viewpoint detected: " .. tostring(b.getCapabilities()))
     else
         print("[VPFPS] running standalone (no Lua bridge); see Zomboid/Logs/vpfps.log")
     end

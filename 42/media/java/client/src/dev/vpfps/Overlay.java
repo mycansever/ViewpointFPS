@@ -4,16 +4,16 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
 /**
- * In-game performance overlay, drawn through Project Zomboid's own
- * TextManager (same channel the ZBHelloWorld sample uses).
+ * In-game performance overlay, drawn through Project Zomboid's TextManager
+ * (reflection-bound at first draw; Guard keeps it fail-soft).
  *
- * TextManager.DrawString overloads vary between builds (int/float/double
- * coordinates), so the method is resolved ONCE by reflection at first
- * draw and the arguments are converted to whatever signature was found.
- * If nothing usable exists, the overlay trips its guard and disappears -
- * it can never take the renderer down with it.
- *
- * Toggle: F9 (default, rebindable via ModOptions) or overlay=false.
+ * v3 lines:
+ *   VPFPS 3.0.0 | ADAPTIVE | target 60 | GPU 73% | PZO: on
+ *   FPS 47.3 (1% low 31.2)  frame 21.1 ms  p99 34.8 ms
+ *   VP render 14.2 ms (67%)  capture 4.1 ms  |  FAR 3.2ms SHADOW 1.8ms
+ *   cpu x0.70  gpu x0.85  |  mem x1.00  VRAM 4210/8192 MiB
+ *   last governor action
+ *   knob status
  */
 public final class Overlay {
 
@@ -41,8 +41,11 @@ public final class Overlay {
             if (drawString == null) return;
 
             int y = Y;
+
+            float gpuBusy = GpuStats.gpuBusyPercent();
             y = line(fontMedium, y, "VPFPS " + Main.VERSION + "  |  "
                             + Config.governor + "  |  target " + Config.targetFps + " fps"
+                            + (gpuBusy >= 0 ? "  |  GPU " + String.format("%.0f%%", gpuBusy) : "")
                             + (PZOCompat.isDetected() ? "  |  PZO: on" : ""),
                     1.0f, 0.9f, 0.4f);
 
@@ -58,26 +61,27 @@ public final class Overlay {
                     FrameGovernor.frameMean(), FrameGovernor.frameP99()), r, g, b);
 
             if (Config.overlayDetail) {
+                String passes = GpuStats.topPasses(3);
                 y = line(fontSmall, y, String.format(
-                        "VP render %.1f ms (%.0f%%)   capture %.1f ms   mesh %.1f ms avg   %d skipped",
+                        "VP render %.1f ms (%.0f%%)   capture %.1f ms%s",
                         FrameGovernor.vpRenderMean(), FrameGovernor.vpShare() * 100f,
                         FrameGovernor.captureMean(),
-                        MeshBudget.stats().mean(), MeshBudget.skippedCount()),
+                        passes.isEmpty() ? "" : "   |   " + passes),
                         0.80f, 0.85f, 0.90f);
 
+                float vrFree = ViewpointMemory.vramFreeMiB();
+                float vrTotal = ViewpointMemory.vramTotalMiB();
+                String vram = vrFree >= 0
+                        ? String.format("VRAM %.0f/%.0f MiB", vrTotal - vrFree, vrTotal) : "";
                 y = line(fontSmall, y, String.format(
-                        "scale %.2f   dist %.2fx   shadow %.2f   mesh budget %.1f ms   walk %d ms",
-                        FrameGovernor.renderScale(), FrameGovernor.drawDistanceFactor(),
-                        FrameGovernor.shadowScale(), MeshBudget.budget(),
-                        Config.chunkWalkThrottleMs), 0.80f, 0.85f, 0.90f);
+                        "cpu x%.2f   gpu x%.2f   |   mem x%.2f%s   |   %s",
+                        FrameGovernor.cpuFactor(), FrameGovernor.gpuFactor(),
+                        Config.memoryScale, vram.isEmpty() ? "" : "   " + vram,
+                        ViewpointKnobs.statusShort()), 0.80f, 0.85f, 0.90f);
             }
 
             y = line(fontSmall, y, FrameGovernor.lastAction(), 0.60f, 0.65f, 0.70f);
-
-            String knobs = ViewpointBridge.capabilitiesShort();
-            if (!knobs.isEmpty()) {
-                line(fontSmall, y, "knobs: " + knobs, 0.60f, 0.65f, 0.70f);
-            }
+            line(fontSmall, y, "F8 panel  |  " + ViewpointMemory.statusShort(), 0.60f, 0.65f, 0.70f);
         });
     }
 
@@ -105,7 +109,7 @@ public final class Overlay {
             for (int i = 1; i < 4; i++) {
                 if (p[i] == String.class) { si = i; break; }
             }
-            if (si != 1 && si != 3) continue; // (UIFont,x,y,S,rgba) or (UIFont,S,x,y,rgba)
+            if (si != 1 && si != 3) continue;
             drawString = m;
             sig = p;
             strIdx = si;

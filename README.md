@@ -6,6 +6,17 @@
 
 ---
 
+## What's new in v3.0 — reverse-engineered against the real Viewpoint.jar
+
+v3.0 was rebuilt from a full static analysis of the shipped Viewpoint.jar (REA + javap: class inventory, `LiveSettings` registry, `Pool` memory manager, `FrameCaps`, `Profile` GPU timers). The mod no longer guesses — it drives **Viewpoint's own settings**:
+
+- **Drives Viewpoint's real settings** — two quality ladders (CPU / GPU) scale Viewpoint's own `LiveSettings` numbers inside their declared min..max ranges: chunk build budgets (`BUILD_MAX`, `MAX_COOKING`), chunk walk (`AT_ONCE`), far world (`BUDGET`, `JOBS`, `REACH`, `DETAIL_1/2/4`), bake budgets, GPU upload pacing, corpse models. Factor 1.0 = stock, and a stock value the user raised in Viewpoint's own UI is never fought.
+- **In-game FPS cap control** — Viewpoint's `FrameCaps` exposed in-game: game cap, menu cap and a full UNCAP button. No more editing files to remove the limit.
+- **RAM / VRAM control** — Viewpoint's `Pool` memory manager (NEAR_MESHES, FAR, SHELL, MODEL_MESHES, LIGHT_GRIDS, CORPSES, CPU, ...) scaled in-game through one pool-budget factor; live VRAM readout from Viewpoint's own `VideoMemory` sampler.
+- **F8 settings panel** — a full in-game panel: live stats header (fps, 1% low, GPU busy, VRAM), governor controls, frame cap, memory, overlay options. Everything adjustable without touching a file.
+- **Pass-level GPU attribution** — reads Viewpoint's `Profile` GPU timers: the overlay shows the top render passes by GPU time (e.g. `FAR 3.2ms SHADOW 1.8ms`), and `GpuBusy.percent()` drives the CPU-vs-GPU decision together with our own render-pass share.
+- **Removed the conflicting v2 patches** — Viewpoint already ships its own chunk budget (`ChunkBuilds.buildBudget`), velocity-aware chunk walking and GPU telemetry. Our v2 mesh-budget gate and walk throttle fought those; both are gone, replaced by driving the real settings.
+
 ## What's new in v2.0
 
 - **Chunk-walk idle throttle** — while you stand still (looting, fighting in place, crafting) Viewpoint still re-scans its chunk cache every frame. v2.0 rate-limits that scan to ~4×/s when idle; full rate returns the instant you move. Free game-thread time the vanilla settings can never give you.
@@ -78,21 +89,20 @@ Two equivalent paths: **Options → MODS → Viewpoint FPS Optimization** (appli
 ```
 ZombieBuddy (java agent) ─ loads dev.vpfps jar
   ├─ Main                 → config, Lua bridge, watcher thread, autoProfile
-  ├─ Patch_GameWindow     → frame measurement + budget refill   (zombie.GameWindow.frameStep)
-  ├─ Patch_FP             → Viewpoint render time               (viewpoint.FP.renderWorld)
-  ├─ Patch_FPCapture      → world-capture time                  (viewpoint.FP.captureWorld)
-  ├─ Patch_ChunkBuilds    → mesh rebuild budget gate            (viewpoint.world.ChunkBuilds.rebuild)
-  ├─ Patch_ChunkWalk      → idle chunk-walk throttle            (viewpoint.world.ChunkWalk.walk)
-  ├─ Patch_IngameState    → overlay drawing                     (zombie.gameStates.IngameState.render)
-  ├─ FrameGovernor        → adaptive quality decisions (GPU/CPU attribution, 4 ladders)
-  ├─ ViewpointBridge      → reflection knob discovery (renderScale, shadowScale, drawDistance)
-  ├─ ChunkWalkThrottle    → movement-aware idle throttle with safety valve
-  ├─ MeshBudget           → thread-safe, self-calibrating token bucket
+  ├─ Patch_GameWindow     → frame measurement                (zombie.GameWindow.frameStep)
+  ├─ Patch_FP             → Viewpoint render time            (viewpoint.FP.renderWorld)
+  ├─ Patch_FPCapture      → world-capture time               (viewpoint.FP.captureWorld)
+  ├─ Patch_IngameState    → overlay drawing                  (zombie.gameStates.IngameState.render)
+  ├─ FrameGovernor        → CPU/GPU factor ladders, attribution (GpuBusy + render share)
+  ├─ ViewpointKnobs       → drives Viewpoint's own LiveSettings (BUILD_MAX, AT_ONCE, REACH...)
+  ├─ ViewpointMemory      → RAM/VRAM pool scaling (Pool) + VideoMemory telemetry
+  ├─ FrameCapControl      → in-game FPS cap (FrameCaps.setGameCap / uncap)
+  ├─ GpuStats             → GpuBusy% + Profile top render passes
   ├─ PZOCompat            → PZ_Optimization detection + defer policy
   ├─ StatsExporter        → CSV benchmark log
   ├─ Overlay / Bridge     → TextManager overlay / Lua facade (VPFPSBridge)
   └─ Guard / Config / Stats / Log
-Lua (client/VPFPS/)  → B42 PZAPI.ModOptions page + F9 keybind + diff-sync
+Lua (client/VPFPS/)  → F8 settings panel + F9 overlay + PZAPI.ModOptions page + diff-sync
 ```
 
 Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Tuning guide: [`docs/TUNING.md`](docs/TUNING.md) · Steam description: [`aciklama.md`](aciklama.md)
@@ -118,6 +128,17 @@ Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Tuning guide: [`docs/
 ## Türkçe
 
 **Project Zomboid Build 42.21'deki [Project Viewpoint](https://steamcommunity.com/sharedfiles/filedetails/?id=3809306528) (first/third-person 3D renderer) için adaptif FPS optimizasyon katmanı** — [ZombieBuddy](https://github.com/zed-0xff/ZombieBuddy) üzerinden yüklenir, sadece client tarafı, MIT lisanslı.
+
+### v3.0'daki yenilikler — gerçek Viewpoint.jar'a karşı tersine mühendislik yapıldı
+
+v3.0, gönderilen Viewpoint.jar'ın tam statik analizinden yeniden inşa edildi (REA + javap: sınıf envanteri, `LiveSettings` kayıt defteri, `Pool` bellek yöneticisi, `FrameCaps`, `Profile` GPU zamanlayıcıları). Artık tahmin yok — mod **Viewpoint'ın kendi ayarlarını** sürüyor:
+
+- **Viewpoint'ın gerçek ayarlarını sürer** — iki kalite merdiveni (CPU / GPU), Viewpoint'ın kendi `LiveSettings` sayılarını beyan edilen min..max aralıklarında ölçekler: chunk build bütçeleri (`BUILD_MAX`, `MAX_COOKING`), chunk walk (`AT_ONCE`), uzak dünya (`BUDGET`, `JOBS`, `REACH`, `DETAIL_1/2/4`), bake bütçeleri, GPU upload hızlandırması, ceset modelleri. Faktör 1.0 = stok; kullanıcı Viewpoint'ın kendi arayüzünde yükselttiği stok değeri asla ezilmez.
+- **Oyun içi FPS sınırı kontrolü** — Viewpoint'ın `FrameCaps`'ı oyun içinde: oyun sınırı, menü sınırı ve tam UNCAP butonu. Sınırı kaldırmak için artık dosya düzenlemek yok.
+- **RAM / VRAM kontrolü** — Viewpoint'ın `Pool` bellek yöneticisi (NEAR_MESHES, FAR, SHELL, MODEL_MESHES, LIGHT_GRIDS, CORPSES, CPU, ...) tek bir havuz-bütçe faktörüyle oyun içinde ölçeklenir; canlı VRAM durumu Viewpoint'ın kendi `VideoMemory` örnekleyicisinden gelir.
+- **F8 ayar paneli** — tam oyun içi panel: canlı istatistik başlığı (fps, 1% low, GPU doluluğu, VRAM), governor kontrolleri, FPS sınırı, bellek, overlay seçenekleri. Bir dosyaya dokunmadan her şey ayarlanabilir.
+- **Pass seviyesinde GPU atıfı** — Viewpoint'ın `Profile` GPU zamanlayıcıları okunur: overlay, GPU süresine göre en çok zaman harcayan render pass'lerini gösterir (örn. `FAR 3.2ms SHADOW 1.8ms`) ve CPU-vs-GPU kararını `GpuBusy.percent()` + kendi render payı ölçümümüz birlikte sürer.
+- **Çakışan v2 patch'leri kaldırıldı** — Viewpoint zaten kendi chunk bütçesini (`ChunkBuilds.buildBudget`), hız algılayan chunk walk'unu ve GPU telemetrisini taşıyor. v2'nin mesh-bütçe kapısı ve walk throttle'ı bunlarla çakışıyordu; ikisi de kaldırıldı, yerine gerçek ayarların sürülmesi geldi.
 
 ### v2.0'daki yenilikler
 

@@ -3,74 +3,56 @@
     Build 42 native ModOptions (PZAPI.ModOptions): Options > MODS >
     "Viewpoint FPS Optimization"
 
-    Every setting is pushed live to the Java side (no restart); the Java
-    side persists to <user>\Zomboid\vpfps.properties. A diff-sync runs on
-    a slow tick so changes apply even where no change callback exists.
+    The full control surface lives in the in-game panel (F8); this page
+    keeps the essentials and the two keybinds. A diff-sync pushes changes
+    to the Java side live.
 ---------------------------------------------------------------------------]]--
 
 if not PZAPI or not PZAPI.ModOptions then
-    print("[VPFPS] PZAPI.ModOptions not available - configure via vpfps.properties")
+    print("[VPFPS] PZAPI.ModOptions not available - use the F8 panel or vpfps.properties")
     return
 end
 
 local page = PZAPI.ModOptions:create("ViewpointFPS", "Viewpoint FPS Optimization")
 
-page:addDescription("Adaptive performance layer for Project Viewpoint (first/third-person renderer).")
+page:addDescription("Adaptive performance layer for Project Viewpoint. Press F8 in game for the full settings panel (governor, frame cap, RAM/VRAM), F9 for the overlay.")
 page:addDescription("All settings apply live - no restart needed. Requires ZombieBuddy + Project Viewpoint.")
 page:addSeparator()
 
 local optEnabled = page:addTickBox("enabled", "Enable optimizations", true,
-        "Master kill switch. When off, every hook passes through and Viewpoint runs untouched.")
+        "Master kill switch. When off, every Viewpoint setting we touched is restored to stock and the hooks pass through.")
 
-local optAdaptive = page:addTickBox("adaptive", "Adaptive quality governor", true,
-        "Automatically lowers/raises render scale, shadows and the mesh budget to hold the target frame time. When off, the fixed values below are used.")
+local optCpuAdaptive = page:addTickBox("cpuAdaptive", "CPU quality ladder", true,
+        "Lets the governor scale Viewpoint's chunk build / walk / far-job settings under game-thread pressure.")
 
-local optDynamicRes = page:addTickBox("dynamicResolution", "Dynamic resolution", true,
-        "Let the governor scale Viewpoint's internal render resolution (only if this Viewpoint build exposes the knob).")
-
-local optMeshBudget = page:addTickBox("meshBudgetEnabled", "Chunk mesh budget", true,
-        "Caps the time Viewpoint may spend rebuilding chunk meshes per frame; leftover chunks rebuild next frame. Smooths streaming spikes when driving or turning fast.")
-
-local optWalkThrottle = page:addTickBox("chunkWalkThrottle", "Chunk-walk idle throttle", true,
-        "While you stand still (looting, fighting, crafting) Viewpoint still re-scans its chunks every frame. This limits that scan to a few times per second when idle; full rate returns the instant you move.")
-
-local optDrawDist = page:addTickBox("drawDistanceAdaptive", "Adaptive draw distance", true,
-        "Lets the governor scale Viewpoint's chunk/draw distance down (and back up) under game-thread pressure. Fewer chunks = fewer meshes and draws.")
-
-local optStatsExport = page:addTickBox("statsExport", "Export stats to CSV", false,
-        "Appends fps / frame-time / p90 / p99 / render-share rows to Zomboid\\vpfps-stats.csv every 5 s - a lightweight benchmark log of your session.")
+local optGpuAdaptive = page:addTickBox("gpuAdaptive", "GPU quality ladder", true,
+        "Lets the governor scale Viewpoint's draw distance / far detail / corpse settings under GPU pressure.")
 
 local optOverlay = page:addTickBox("overlay", "Performance overlay", true,
-        "On-screen readout: fps, frame time, p99, VP render share, governor state. Toggle in game with the key below (default F9).")
+        "On-screen readout: fps, 1% low, p99, GPU busy, VRAM, governor state. Toggle with the key below (default F9).")
+
+local optStatsExport = page:addTickBox("statsExport", "Export stats to CSV", false,
+        "Appends fps / p90 / p99 / GPU-busy / factor rows to Zomboid\\vpfps-stats.csv every 5 s.")
 
 local optTargetFps = page:addSlider("targetFps", "Target FPS", 30, 240, 5, 60)
-local optScaleFixed = page:addSlider("renderScaleFixed", "Fixed render scale", 0.5, 1.0, 0.05, 1.0)
-local optScaleMin = page:addSlider("renderScaleMin", "Min render scale (adaptive floor)", 0.4, 1.0, 0.05, 0.5)
-local optMeshMs = page:addSlider("meshBudgetMs", "Mesh budget (ms per frame)", 0.5, 8.0, 0.5, 2.0)
-local optWalkMs = page:addSlider("chunkWalkThrottleMs", "Idle chunk-walk interval (ms)", 100, 1000, 50, 250)
-local optDrawDistMin = page:addSlider("drawDistanceMin", "Min draw distance (factor)", 0.5, 1.0, 0.05, 0.7)
 
-local defaultKey = 67 -- LWJGL KEY_F9
-pcall(function() defaultKey = Keyboard.KEY_F9 end)
-local optKey = page:addKeyBind("overlayKey", "Toggle overlay key", defaultKey)
+local defaultPanelKey = 66 -- LWJGL KEY_F8
+pcall(function() defaultPanelKey = Keyboard.KEY_F8 end)
+local optPanelKey = page:addKeyBind("panelKey", "Open settings panel", defaultPanelKey)
 
--- expose the option objects to the bootstrap (keybind handler)
+local defaultOverlayKey = 67 -- LWJGL KEY_F9
+pcall(function() defaultOverlayKey = Keyboard.KEY_F9 end)
+local optOverlayKey = page:addKeyBind("overlayKey", "Toggle overlay key", defaultOverlayKey)
+
 VPFPS.options = {
-    enabled           = optEnabled,
-    adaptive          = optAdaptive,
-    dynamicResolution = optDynamicRes,
-    meshBudgetEnabled = optMeshBudget,
-    chunkWalkThrottle = optWalkThrottle,
-    drawDistanceAdaptive = optDrawDist,
-    statsExport       = optStatsExport,
-    overlay           = optOverlay,
-    targetFps         = optTargetFps,
-    renderScaleFixed  = optScaleFixed,
-    renderScaleMin    = optScaleMin,
-    meshBudgetMs      = optMeshMs,
-    chunkWalkThrottleMs = optWalkMs,
-    drawDistanceMin   = optDrawDistMin,
-    overlayKey        = optKey,
+    enabled      = optEnabled,
+    cpuAdaptive  = optCpuAdaptive,
+    gpuAdaptive  = optGpuAdaptive,
+    overlay      = optOverlay,
+    statsExport  = optStatsExport,
+    targetFps    = optTargetFps,
+    panelKey     = optPanelKey,
+    overlayKey   = optOverlayKey,
 }
 
 -- ---------------------------------------------------------------------------
@@ -97,23 +79,14 @@ local function push()
         end
     end
 
-    diff("enabled",           readOpt(optEnabled),    function(v) b.setEnabled(v) end)
-    diff("adaptive",          readOpt(optAdaptive),   function(v) b.setAdaptive(v) end)
-    diff("dynamicResolution", readOpt(optDynamicRes), function(v) b.setDynamicResolution(v) end)
-    diff("meshBudgetEnabled", readOpt(optMeshBudget), function(v) b.setMeshBudgetEnabled(v) end)
-    diff("chunkWalkThrottle", readOpt(optWalkThrottle), function(v) b.setChunkWalkThrottle(v) end)
-    diff("drawDistanceAdaptive", readOpt(optDrawDist), function(v) b.setDrawDistanceAdaptive(v) end)
-    diff("statsExport",       readOpt(optStatsExport), function(v) b.setStatsExport(v) end)
-    diff("overlay",           readOpt(optOverlay),    function(v) b.setOverlayEnabled(v) end)
-    diff("targetFps",         readOpt(optTargetFps),  function(v) b.setTargetFps(v) end)
-    diff("renderScaleFixed",  readOpt(optScaleFixed), function(v) b.setRenderScaleFixed(v) end)
-    diff("renderScaleMin",    readOpt(optScaleMin),   function(v) b.setRenderScaleMin(v) end)
-    diff("meshBudgetMs",      readOpt(optMeshMs),     function(v) b.setMeshBudgetMs(v) end)
-    diff("chunkWalkThrottleMs", readOpt(optWalkMs),   function(v) b.setChunkWalkThrottleMs(v) end)
-    diff("drawDistanceMin",   readOpt(optDrawDistMin), function(v) b.setDrawDistanceMin(v) end)
+    diff("enabled",     readOpt(optEnabled),     function(v) b.setEnabled(v) end)
+    diff("cpuAdaptive", readOpt(optCpuAdaptive), function(v) b.setCpuAdaptive(v) end)
+    diff("gpuAdaptive", readOpt(optGpuAdaptive), function(v) b.setGpuAdaptive(v) end)
+    diff("overlay",     readOpt(optOverlay),     function(v) b.setOverlayEnabled(v) end)
+    diff("statsExport", readOpt(optStatsExport), function(v) b.setStatsExport(v) end)
+    diff("targetFps",   readOpt(optTargetFps),   function(v) b.setTargetFps(v) end)
 end
 
--- apply once when a world loads, then keep in sync on a slow tick
 Events.OnGameStart.Add(function()
     last = {}
     push()
