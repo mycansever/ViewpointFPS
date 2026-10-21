@@ -17,7 +17,7 @@
 
 VPFPS = VPFPS or {}
 VPFPS.MOD_ID = "ViewpointFPS"
-VPFPS.VERSION = "3.0.1"
+VPFPS.VERSION = "3.0.2"
 
 local bridge, bridgeWarned = nil, false
 

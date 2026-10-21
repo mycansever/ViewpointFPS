@@ -1,7 +1,14 @@
 package dev.vpfps;
 
+import me.zed_0xff.zombie_buddy.Exposer;
+
 /**
- * Static facade exposed to Lua as the global "VPFPSBridge".
+ * Lua-facing facade, exposed to Lua as the global "VPFPSBridge" through
+ * ZombieBuddy's official mechanism: @Exposer.LuaClass. ZombieBuddy scans
+ * the mod's javaPkgName package (dev.vpfps), registers the class with the
+ * game's Lua engine, and static methods become callable as
+ * VPFPSBridge.method(...) - the documented ZombieBuddy modding pattern
+ * (same as zed_0xff's own ZBetterWorkshopUpload).
  *
  * Lua-facing contract:
  *   - only double / boolean / String parameters and returns (Kahlua maps
@@ -11,6 +18,7 @@ package dev.vpfps;
  * v3.0 surface: governor control, Viewpoint's own settings via factor
  * ladders, memory-pool scaling, in-game frame-cap control, live stats.
  */
+@Exposer.LuaClass(name = "VPFPSBridge")
 public final class Bridge {
 
     private Bridge() {}
