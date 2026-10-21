@@ -33,7 +33,9 @@ local function call(method, ...)
 end
 
 local function fmt(v, decimals)
-    if v == nil then return "?" end
+    if v == nil then return "n/a" end
+    if v ~= v then return "n/a" end          -- NaN (NaN ~= NaN in Lua)
+    if v < 0 then return "n/a" end           -- -1 = feature unavailable
     return string.format("%." .. (decimals or 0) .. "f", v)
 end
 
@@ -138,6 +140,8 @@ function VPFPS_Panel:onStep(button)
     else
         v = math.floor(v * 100 + 0.5) / 100
     end
+    -- clamp again after rounding (e.g. 1.00 + 0.05 rounded to 1.00)
+    v = math.max(button.userMin, math.min(button.userMax, v))
     call(button.userSetter, v)
     self:refreshControls()
 end
@@ -165,15 +169,15 @@ function VPFPS_Panel:refreshControls()
     for _, btn in ipairs(self.toggles) do
         if btn.userGetter == "getGovernor" then
             local v = call("getGovernor")
-            btn:setTitle(v ~= nil and string.upper(v) or "?")
+            btn:setTitle(v ~= nil and string.upper(v) or "N/A")
         else
             local v = call(btn.userGetter)
-            btn:setTitle(v == nil and "n/a" or (v and "ON" or "OFF"))
+            btn:setTitle(v == nil and "N/A" or (v and "ON" or "OFF"))
         end
     end
     for _, s in ipairs(self.steppers) do
         local v = call(s.getter)
-        s.value = v ~= nil and fmt(v, s.decimals) or "?"
+        s.value = fmt(v, s.decimals)
     end
 end
 

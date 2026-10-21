@@ -1,36 +1,40 @@
 --[[---------------------------------------------------------------------------
-    Viewpoint FPS Optimization v3.0.0 - client bootstrap
+    Viewpoint FPS Optimization v3.0.1 - client bootstrap
     Target: Project Zomboid Build 42.21 + Project Viewpoint (via ZombieBuddy)
 
     Keys (rebindable in Options > MODS):
       F9  - toggle the performance overlay
       F8  - toggle the in-game settings panel (governor, frame cap, memory)
 
-    NOTE: do not bind F10 - Windows opens the window menu on F10 and freezes
-    the rendered frame (an OS behaviour, not caused by this mod).
+    KAHLUA NOTE: pcall in this Lua VM does NOT catch "call nil" errors
+    (they escape as RuntimeException and kill the whole event handler),
+    so this file NEVER calls a possibly-nil value - everything is
+    nil-checked before use. Keep that invariant when editing.
+
+    NOTE: do not bind F10 - Windows opens the window menu on F10 and
+    freezes the rendered frame (an OS behaviour, not this mod).
 ---------------------------------------------------------------------------]]--
 
 VPFPS = VPFPS or {}
 VPFPS.MOD_ID = "ViewpointFPS"
-VPFPS.VERSION = "3.0.0"
+VPFPS.VERSION = "3.0.1"
 
 local bridge, bridgeWarned = nil, false
 
 --- Returns the Java bridge table, or nil when unavailable.
 function VPFPS.getBridge()
     if bridge ~= nil then return bridge end
-    local ok, b = pcall(function() return VPFPSBridge end)
-    if ok and b ~= nil then
-        bridge = b
-        return bridge
-    end
-    return nil
+    if VPFPSBridge == nil then return nil end
+    bridge = VPFPSBridge
+    return bridge
 end
 
---- Safe bridge call: VPFPS.call("setTargetFps", 60). Never throws.
+--- Safe bridge call: VPFPS.call("setTargetFps", 60).
+--- Nil-safe for Kahlua: the method is nil-checked BEFORE any call, and
+--- the call itself runs inside pcall. Never throws.
 function VPFPS.call(method, ...)
     local b = VPFPS.getBridge()
-    if not b then
+    if b == nil then
         if not bridgeWarned then
             bridgeWarned = true
             print("[VPFPS] Java bridge not reachable from Lua - the Java side still runs on its own;")
@@ -39,7 +43,10 @@ function VPFPS.call(method, ...)
         return nil
     end
     local fn = b[method]
-    if type(fn) ~= "function" then return nil end
+    if fn == nil then
+        print("[VPFPS] bridge has no method: " .. tostring(method))
+        return nil
+    end
     local ok, res = pcall(fn, ...)
     if not ok then
         print("[VPFPS] bridge call failed: " .. tostring(method) .. " -> " .. tostring(res))
@@ -49,8 +56,12 @@ function VPFPS.call(method, ...)
 end
 
 --- Is the Project Viewpoint mod active in this session?
+--- Kahlua-safe: getActiveMods / :contains are nil-checked first.
 local function isViewpointActive()
-    local ok, res = pcall(function() return getActiveMods():contains("Viewpoint") end)
+    if getActiveMods == nil then return false end
+    local mods = getActiveMods()
+    if mods == nil or mods.contains == nil then return false end
+    local ok, res = pcall(mods.contains, mods, "Viewpoint")
     return ok and res == true
 end
 
@@ -63,8 +74,8 @@ local function onKeyToggle(key)
     if opts == nil then return end
 
     local function keyValue(opt)
-        if opt == nil then return nil end
-        local ok, v = pcall(function() return opt:getValue() end)
+        if opt == nil or opt.getValue == nil then return nil end
+        local ok, v = pcall(opt.getValue, opt)
         if ok then return v end
         return nil
     end
@@ -72,40 +83,37 @@ local function onKeyToggle(key)
     -- overlay toggle
     local overlayKey = keyValue(opts.overlayKey)
     if overlayKey ~= nil and key == overlayKey then
-        local b = VPFPS.getBridge()
-        if b then
-            local on = b.isOverlayEnabled()
-            if on ~= nil then b.setOverlayEnabled(not on) end
-        end
+        local on = VPFPS.call("isOverlayEnabled")
+        if on ~= nil then VPFPS.call("setOverlayEnabled", not on) end
         return
     end
 
     -- panel toggle
     local panelKey = keyValue(opts.panelKey)
     if panelKey ~= nil and key == panelKey then
-        if VPFPS.togglePanel then VPFPS.togglePanel() end
+        if VPFPS.togglePanel ~= nil then VPFPS.togglePanel() end
         return
     end
 end
 
 -- OnKeyStartPressed fires once per physical press (no auto-repeat)
 local keyEvent = Events.OnKeyStartPressed or Events.OnKeyPressed
-if keyEvent then keyEvent.Add(onKeyToggle) end
+if keyEvent ~= nil and keyEvent.Add ~= nil then keyEvent.Add(onKeyToggle) end
 
 -- ---------------------------------------------------------------------------
--- session start: report status once, bind memory pools early
+-- session start: report status once
 -- ---------------------------------------------------------------------------
 
 Events.OnGameStart.Add(function()
     local b = VPFPS.getBridge()
-    if b then
-        print("[VPFPS] bridge online: " .. tostring(b.ping()))
-        print("[VPFPS] Viewpoint detected: " .. tostring(b.getCapabilities()))
+    if b ~= nil then
+        print("[VPFPS] bridge online: " .. tostring(VPFPS.call("ping")))
+        print("[VPFPS] capabilities: " .. tostring(VPFPS.call("getCapabilities")))
     else
         print("[VPFPS] running standalone (no Lua bridge); see Zomboid/Logs/vpfps.log")
     end
     if not isViewpointActive() then
-        print("[VPFPS] WARNING: Project Viewpoint does not appear to be enabled -")
+        print("[VPFPS] NOTE: Project Viewpoint does not appear in the active mod list -")
         print("[VPFPS] this mod optimizes Viewpoint's renderer; enable it in Mods to benefit.")
     end
 end)

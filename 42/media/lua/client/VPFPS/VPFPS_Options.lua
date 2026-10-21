@@ -37,11 +37,11 @@ local optStatsExport = page:addTickBox("statsExport", "Export stats to CSV", fal
 local optTargetFps = page:addSlider("targetFps", "Target FPS", 30, 240, 5, 60)
 
 local defaultPanelKey = 66 -- LWJGL KEY_F8
-pcall(function() defaultPanelKey = Keyboard.KEY_F8 end)
+if Keyboard ~= nil and Keyboard.KEY_F8 ~= nil then defaultPanelKey = Keyboard.KEY_F8 end
 local optPanelKey = page:addKeyBind("panelKey", "Open settings panel", defaultPanelKey)
 
 local defaultOverlayKey = 67 -- LWJGL KEY_F9
-pcall(function() defaultOverlayKey = Keyboard.KEY_F9 end)
+if Keyboard ~= nil and Keyboard.KEY_F9 ~= nil then defaultOverlayKey = Keyboard.KEY_F9 end
 local optOverlayKey = page:addKeyBind("overlayKey", "Toggle overlay key", defaultOverlayKey)
 
 VPFPS.options = {
@@ -62,29 +62,28 @@ VPFPS.options = {
 local last = {}
 
 local function readOpt(o)
-    if o == nil then return nil end
-    local ok, v = pcall(function() return o:getValue() end)
+    if o == nil or o.getValue == nil then return nil end
+    local ok, v = pcall(o.getValue, o)
     if ok then return v end
     return nil
 end
 
 local function push()
-    local b = VPFPS.getBridge and VPFPS.getBridge() or nil
-    if not b then return end
+    if VPFPS.getBridge() == nil then return end
 
-    local function diff(name, value, fn)
+    local function diff(name, value, method)
         if value ~= nil and value ~= last[name] then
             last[name] = value
-            pcall(fn, value)
+            VPFPS.call(method, value)
         end
     end
 
-    diff("enabled",     readOpt(optEnabled),     function(v) b.setEnabled(v) end)
-    diff("cpuAdaptive", readOpt(optCpuAdaptive), function(v) b.setCpuAdaptive(v) end)
-    diff("gpuAdaptive", readOpt(optGpuAdaptive), function(v) b.setGpuAdaptive(v) end)
-    diff("overlay",     readOpt(optOverlay),     function(v) b.setOverlayEnabled(v) end)
-    diff("statsExport", readOpt(optStatsExport), function(v) b.setStatsExport(v) end)
-    diff("targetFps",   readOpt(optTargetFps),   function(v) b.setTargetFps(v) end)
+    diff("enabled",     readOpt(optEnabled),     "setEnabled")
+    diff("cpuAdaptive", readOpt(optCpuAdaptive), "setCpuAdaptive")
+    diff("gpuAdaptive", readOpt(optGpuAdaptive), "setGpuAdaptive")
+    diff("overlay",     readOpt(optOverlay),     "setOverlayEnabled")
+    diff("statsExport", readOpt(optStatsExport), "setStatsExport")
+    diff("targetFps",   readOpt(optTargetFps),   "setTargetFps")
 end
 
 Events.OnGameStart.Add(function()

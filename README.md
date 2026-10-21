@@ -119,9 +119,20 @@ Details: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) · Tuning guide: [`docs/
 | Symptom | Fix |
 |---|---|
 | Not in the Mods list | Does `42\media\java\client\build\libs\vpfps.jar` exist? If not, run `build.ps1`. |
-| "knob 'renderScale' not found" | Different Viewpoint version; the mod still provides mesh budget + overlay. Add the new field name to `ViewpointBridge.KNOBS` and rebuild. |
-| No FPS gain | Check the overlay's "VP render %" line; if low, the bottleneck is the game thread — set `meshBudgetMs=1.0` and a realistic `targetFps`. |
+| **"knob bound: ..." lines missing / "knobs bound so far: X/Y"** | See the **"knob not found" guide** below. |
+| Panel shows "N/A" everywhere | The Lua bridge did not load: check `Zomboid\Logs\vpfps.log` for "Lua bridge exposed". Java-side features still run; tune via `vpfps.properties`. |
+| No FPS gain | Check the overlay's "GPU %" line; low GPU busy + bad fps = game-thread bound → lower the CPU floor in the F8 panel. |
 | Suspected crash | Check `Zomboid\Logs\vpfps.log`; test with `enabled=false`. |
+
+### The "knob not found" guide (detailed)
+
+The log line `knob '...' not found` (or `knobs bound so far: 3/15 (Viewpoint still initializing - will retry)`) means one of Viewpoint's tunable settings could not be bound. Proceed like this:
+
+1. **Let it retry first.** Viewpoint creates its settings during game start; the mod retries the binding for up to 40 decision windows. A world must be LOADED (main menu is not enough) — the knobs bind on the first rendered frame. Enter a world, wait ~30 seconds, then re-check the log.
+2. **Check what actually bound.** In `Zomboid\Logs\vpfps.log` look for the `capabilities:` line and the overlay/panel footer ("cpu 10 gpu 5 bound (15/15)"). Everything that bound works; the missing knobs are simply skipped — the governor scales what it has.
+3. **Verify Viewpoint is really loaded.** The log must contain `viewpoint class found: viewpoint.FP` (or several). If not: Viewpoint is not enabled in Mods, or ZombieBuddy did not approve its jar (open the game, MODS screen, check ZombieBuddy's approval list), or Viewpoint was updated and failed to load (check its own errors in `console.txt`).
+4. **A Viewpoint update renamed a setting** (most common after updates). The mod is unharmed — missing knobs degrade gracefully. To restore them: find the new field name with `javap -p -cp Viewpoint.jar <class>` (look for `LiveSettings$Number` fields), add it to `ViewpointKnobs.DEFINITIONS` in the source, run `build.ps1`, restart. PRs welcome.
+5. **Nothing bound at all** (0/15 after several minutes in-world): your Viewpoint build predates or postdates the settings layout this mod was reverse-engineered against (alpha-0.1.6). The mod still provides: frame measurement, overlay, stats export, PZO compat and the FrameCaps FPS control — only the quality ladders are idle.
 
 ---
 
