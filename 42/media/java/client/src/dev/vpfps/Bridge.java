@@ -57,6 +57,7 @@ public final class Bridge {
     // ---- live stats (for the panel header) ----
 
     public static double getFps()               { return FrameGovernor.fps(); }
+    public static double getPresentedFps()      { return FrameGovernor.presentedFps(); }
     public static double getFpsOnePercentLow()  { return FrameGovernor.fpsOnePercentLow(); }
     public static double getFrameTimeMs()       { return FrameGovernor.frameMean(); }
     public static double getFrameTimeP99Ms()    { return FrameGovernor.frameP99(); }
@@ -217,6 +218,16 @@ public final class Bridge {
 
     public static boolean isOverlayEnabled() {
         return Config.overlay;
+    }
+
+    /** Overlay toggle key (LWJGL code) - polled Java-side, survives PZO's key consumption. */
+    public static void setOverlayKey(double v) {
+        Config.overlayKey = (int) Math.max(1, Math.min(400, Math.round(v)));
+        Config.save();
+    }
+
+    public static double getOverlayKey() {
+        return Config.overlayKey;
     }
 
     public static void setOverlayDetail(boolean v) {

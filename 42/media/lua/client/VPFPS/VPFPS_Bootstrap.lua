@@ -17,7 +17,7 @@
 
 VPFPS = VPFPS or {}
 VPFPS.MOD_ID = "ViewpointFPS"
-VPFPS.VERSION = "3.0.2"
+VPFPS.VERSION = "3.1.0"
 
 local bridge, bridgeWarned = nil, false
 
@@ -66,7 +66,9 @@ local function isViewpointActive()
 end
 
 -- ---------------------------------------------------------------------------
--- keys: F9 overlay, F8 panel
+-- keys: F8 panel (the overlay key F9 is polled JAVA-side in KeyPoller -
+-- PZ_Optimization consumes the F9 Lua key event for its own overlay, so a
+-- Lua listener would never see it; the Java poller survives that)
 -- ---------------------------------------------------------------------------
 
 local function onKeyToggle(key)
@@ -78,14 +80,6 @@ local function onKeyToggle(key)
         local ok, v = pcall(opt.getValue, opt)
         if ok then return v end
         return nil
-    end
-
-    -- overlay toggle
-    local overlayKey = keyValue(opts.overlayKey)
-    if overlayKey ~= nil and key == overlayKey then
-        local on = VPFPS.call("isOverlayEnabled")
-        if on ~= nil then VPFPS.call("setOverlayEnabled", not on) end
-        return
     end
 
     -- panel toggle

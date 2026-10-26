@@ -1,7 +1,7 @@
 name=Viewpoint FPS Optimization
 id=ViewpointFPS
 description=Adaptive performance layer for Project Viewpoint: drives Viewpoint's own settings (chunk builds, draw distance, far detail) via CPU/GPU quality ladders, in-game FPS cap control (FrameCaps), RAM/VRAM pool scaling, GPU telemetry overlay and an F8 settings panel. Tuned for PZ Build 42.21 + Viewpoint alpha-0.1.6. PZ_Optimization-compatible. Client-side only.
-version=3.0.2
+version=3.1.0
 author=ViewpointFPS Project
 poster=poster.png
 

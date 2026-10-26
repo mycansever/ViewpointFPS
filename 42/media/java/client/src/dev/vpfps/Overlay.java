@@ -50,15 +50,24 @@ public final class Overlay {
                     1.0f, 0.9f, 0.4f);
 
             float fps = FrameGovernor.fps();
+            float presented = FrameGovernor.presentedFps();
             float t = Config.targetFps;
             float r, g, b;
-            if (fps >= t * 0.95f)      { r = 0.35f; g = 0.95f; b = 0.45f; }
-            else if (fps >= t * 0.70f) { r = 0.95f; g = 0.80f; b = 0.25f; }
-            else                       { r = 0.95f; g = 0.35f; b = 0.30f; }
-            y = line(fontSmall, y, String.format(
-                    "FPS %.1f (1%% low %.1f)   frame %.1f ms   p99 %.1f ms",
-                    fps, FrameGovernor.fpsOnePercentLow(),
-                    FrameGovernor.frameMean(), FrameGovernor.frameP99()), r, g, b);
+            float headline = presented > 0 ? presented : fps;
+            if (headline >= t * 0.95f)      { r = 0.35f; g = 0.95f; b = 0.45f; }
+            else if (headline >= t * 0.70f) { r = 0.95f; g = 0.80f; b = 0.25f; }
+            else                            { r = 0.95f; g = 0.35f; b = 0.30f; }
+            if (presented > 0) {
+                y = line(fontSmall, y, String.format(
+                        "FPS %.1f (presented)   step %.1f   1%% low %.1f   p99 %.1f ms",
+                        presented, fps, FrameGovernor.fpsOnePercentLow(),
+                        FrameGovernor.frameP99()), r, g, b);
+            } else {
+                y = line(fontSmall, y, String.format(
+                        "FPS %.1f (1%% low %.1f)   frame %.1f ms   p99 %.1f ms",
+                        fps, FrameGovernor.fpsOnePercentLow(),
+                        FrameGovernor.frameMean(), FrameGovernor.frameP99()), r, g, b);
+            }
 
             if (Config.overlayDetail) {
                 String passes = GpuStats.topPasses(3);

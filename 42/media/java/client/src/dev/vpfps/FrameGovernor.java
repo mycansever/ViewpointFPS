@@ -65,11 +65,13 @@ public final class FrameGovernor {
             PZOCompat.init();
             applyAll("initial apply");
         }
+        KeyPoller.poll(); // Java-side overlay key (works even when PZO eats the Lua key event)
         frameStartNs = System.nanoTime();
     }
 
     public static void onFrameEnd() {
         frameMs.push((System.nanoTime() - frameStartNs) / 1_000_000f);
+        PresentCounter.sample(); // presented-frame counter (what GPU overlays show)
         if (ViewpointKnobs.ensureBound()) {
             // bind retry until Viewpoint's settings exist; then govern
             if (Config.enabled && Config.governor == Config.GovernorMode.ADAPTIVE) tick();
@@ -258,6 +260,11 @@ public final class FrameGovernor {
     public static float cpuFactor() { return FACTOR_STEPS[cpuIdx]; }
     public static float gpuFactor() { return FACTOR_STEPS[gpuIdx]; }
     public static String lastAction() { return lastAction; }
+
+    /** Presented-frame rate (what GPU overlays show); -1 until a window completes. */
+    public static float presentedFps() {
+        return PresentCounter.presentedFps();
+    }
 
     public static String status() {
         return String.format(

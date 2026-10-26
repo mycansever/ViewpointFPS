@@ -43,6 +43,9 @@ local optPanelKey = page:addKeyBind("panelKey", "Open settings panel", defaultPa
 local defaultOverlayKey = 67 -- LWJGL KEY_F9
 if Keyboard ~= nil and Keyboard.KEY_F9 ~= nil then defaultOverlayKey = Keyboard.KEY_F9 end
 local optOverlayKey = page:addKeyBind("overlayKey", "Toggle overlay key", defaultOverlayKey)
+-- note: this key is polled Java-side (works even with PZ_Optimization installed,
+-- which consumes the F9 Lua event for its own overlay). Do NOT bind it to F10 -
+-- Windows opens the window menu on F10 and freezes the frame.
 
 VPFPS.options = {
     enabled      = optEnabled,
@@ -84,6 +87,7 @@ local function push()
     diff("overlay",     readOpt(optOverlay),     "setOverlayEnabled")
     diff("statsExport", readOpt(optStatsExport), "setStatsExport")
     diff("targetFps",   readOpt(optTargetFps),   "setTargetFps")
+    diff("overlayKey",  readOpt(optOverlayKey),  "setOverlayKey")
 end
 
 Events.OnGameStart.Add(function()

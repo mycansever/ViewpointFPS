@@ -208,11 +208,16 @@ function VPFPS_Panel:render()
     local y = 34
     local target = c.target or 60
 
-    local fps = c.fps or 0
+    -- headline: presented fps when available (matches external GPU overlays),
+    -- game-step fps as fallback
+    local presented = call("getPresentedFps")
+    local fps = presented ~= nil and presented > 0 and presented or (c.fps or 0)
     local col = COL_BAD
     if fps >= target * 0.95 then col = COL_GOOD
     elseif fps >= target * 0.70 then col = COL_WARN end
-    self:drawTextRight(string.format("FPS %s   (1%% low %s)", fmt(fps, 1), fmt(c.low, 1)),
+    local label = "FPS"
+    if presented ~= nil and presented > 0 then label = "FPS (presented)" end
+    self:drawTextRight(string.format("%s %s   (1%% low %s)", label, fmt(fps, 1), fmt(c.low, 1)),
             self.width - 48, y, col.r, col.g, col.b, 1.0, FONT_M)
     y = y + 22
 

@@ -38,6 +38,7 @@ public final class Config {
     public static volatile float memoryScale = 1.0f;       // pool budget scale
     public static volatile boolean overlay = true;
     public static volatile boolean overlayDetail = true;
+    public static volatile int overlayKey = 67;           // LWJGL F9; Java-polled (see KeyPoller)
     public static volatile boolean statsExport = false;
     public static volatile PzoDefer deferToPZOpt = PzoDefer.AUTO;
     public static volatile boolean autoProfile = true;
@@ -71,6 +72,7 @@ public final class Config {
         memoryScale    = (float) clampD(num(p, "memoryScale", 1.0), 0.30, 2.0);
         overlay        = bool(p, "overlay", true);
         overlayDetail  = bool(p, "overlayDetail", true);
+        overlayKey     = (int) clampD(num(p, "overlayKey", 67), 1, 400);
         statsExport    = bool(p, "statsExport", false);
         deferToPZOpt   = pzoDefer(p.getProperty("deferToPZOpt"), PzoDefer.AUTO);
         autoProfile    = bool(p, "autoProfile", true);
@@ -162,6 +164,7 @@ public final class Config {
         m.put("memoryScale", trim(memoryScale));
         m.put("overlay", String.valueOf(overlay));
         m.put("overlayDetail", String.valueOf(overlayDetail));
+        m.put("overlayKey", String.valueOf(overlayKey));
         m.put("statsExport", String.valueOf(statsExport));
         m.put("deferToPZOpt", deferToPZOpt.name().toLowerCase());
         m.put("autoProfile", String.valueOf(autoProfile));

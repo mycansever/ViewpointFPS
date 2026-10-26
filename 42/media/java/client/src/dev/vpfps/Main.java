@@ -26,7 +26,7 @@ import java.lang.reflect.Method;
  */
 public final class Main {
 
-    public static final String VERSION = "3.0.2";
+    public static final String VERSION = "3.1.0";
     public static final String TARGET_GAME = "Project Zomboid Build 42.21";
     public static final String TARGET_VIEWPOINT = "Project Viewpoint (Workshop 3809306528)";
 

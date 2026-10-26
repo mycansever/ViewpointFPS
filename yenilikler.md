@@ -5,6 +5,20 @@
 
 ---
 
+## v3.1.0 — Sunum FPS'i + Java-tarafı F9 / Presented FPS + Java-side F9
+
+**EN**
+- **The overlay now shows the PRESENTED frame rate** — the number external GPU overlays (NVIDIA App etc.) display, not just the game-step rate. Read from Viewpoint's own swap counter (`FrameTimes.count`, reverse-engineered): the headline shows `FPS 287 (presented)` with the game-step rate as `step 160` beside it, so both numbers — and why they differ — are visible at a glance. The F8 panel headline uses the presented rate too.
+- **Fixed the F9 overlay toggle not responding when PZ_Optimization is installed**: PZO consumes the F9 key event in Java for its own overlay, so our Lua key listener never saw it (F8 worked because PZO does not eat that key). The overlay key is now **polled directly in Java** (`KeyPoller`, edge-detected `Keyboard.isKeyDown` once per frame with a text-entry guard) — it works no matter who consumes the events. Rebinding through Options > MODS syncs the key to the Java side.
+- New config key: `overlayKey` (default 67 / F9).
+
+**TR**
+- **Overlay artık SUNULAN kare hızını gösteriyor** — harici GPU overlay'lerinin (NVIDIA App vb.) gösterdiği sayı, sadece game-step hızını değil. Viewpoint'ın kendi swap sayacından okunuyor (`FrameTimes.count`, tersine mühendislik ile bulundu): başlık `FPS 287 (presented)` gösterirken yanında game-step hızı `step 160` olarak duruyor — böylece iki sayı ve neden farklı oldukları tek bakışta görülüyor. F8 panel başlığı da sunum hızını kullanıyor.
+- **PZ_Optimization kuruluyken F9 overlay anahtarının tepki vermemesi düzeltildi**: PZO, kendi overlay'i için F9 tuş olayını Java tarafında tüketiyor — bizim Lua dinleyicimiz onu hiç görmüyordu (F8 çalışıyordu çünkü PZO o tuşu yemiyor). Overlay anahtarı artık **doğrudan Java'da yoklanıyor** (`KeyPoller`, frame başına kenar-algılamalı `Keyboard.isKeyDown`, metin girişi korumasıyla) — olayları kim tüketirse tüketsin çalışıyor. Options > MODS üzerinden tuş değiştirme Java tarafına senkronize oluyor.
+- Yeni config anahtarı: `overlayKey` (varsayılan 67 / F9).
+
+---
+
 ## v3.0.2 — Lua köprüsü düzeltmesi / Lua bridge fix
 
 **EN**
